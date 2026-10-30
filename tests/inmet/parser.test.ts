@@ -97,5 +97,6 @@ test("identifica timestamps duplicados sem remover registros", () => {
   const temperatures = normalized.observations.filter((item) => item.variable === "air_temperature");
 
   assert.equal(temperatures.length, 2);
+  assert.equal(new Set(temperatures.map((item) => item.id)).size, 2);
   assert.ok(temperatures.every((item) => item.qualityFlags.includes("duplicate")));
 });
