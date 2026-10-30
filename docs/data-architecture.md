@@ -42,14 +42,31 @@ Mapa, séries temporais, comparações e exportação
 7. **Manter unidades explícitas.** Conversões devem ocorrer no adaptador ou na normalização e ser documentadas.
 8. **Manter adaptadores por provedor.** O frontend não deve conhecer detalhes específicos do formato do INMET ou da REDEMET.
 
-## Modelo canônico inicial
+## Modelo canônico
 
 Os contratos TypeScript estão em `types/meteorology.ts`:
 
-- MeteorologicalDataSource: identificação do provedor/produto.
-- MeteorologicalStation: estação e seu identificador no provedor.
-- MeteorologicalObservation: variável, valor, unidade, tempos, agregação, qualidade e referência ao dado bruto.
-- IngestionRun: rastreabilidade da execução de aquisição.
+- `MeteorologicalDataSource`: identificação do provedor/produto.
+- `MeteorologicalStation`: estação e seu identificador no provedor.
+- `MeteorologicalObservation`: variável, valor, unidade, tempos, agregação, qualidade e referência ao dado bruto.
+- `IngestionRun`: rastreabilidade da execução de aquisição.
+
+### Observações medidas, agregadas e derivadas
+
+A variável meteorológica permanece independente da estatística aplicada. Por exemplo, temperatura mínima e máxima são ambas `air_temperature`; o campo `statistic` distingue `minimum`, `maximum` e `mean`. Isso evita criar uma variável canônica diferente para cada resumo estatístico.
+
+O contrato de observação oferece os seguintes campos opcionais, preservando compatibilidade com os registros já existentes:
+
+- `statistic`: `minimum`, `maximum`, `mean`, `sum`, `range` ou `count`.
+- `periodStart` e `periodEnd`: limites do período analisado, em ISO 8601 UTC.
+- `method`: `measured` (valor fornecido pela fonte), `calculated` (agregação estatística) ou `derived` (indicador calculado a partir de outras variáveis).
+- `coverage`: quantidade esperada e disponível de registros e a razão de completude entre 0 e 1.
+
+Para uma estatística diária, `aggregation` será `daily`, enquanto `statistic` informa qual resumo foi calculado. Uma observação horária da fonte continua sendo representada sem estatística adicional e pode indicar `method: "measured"`.
+
+A cobertura precisa acompanhar agregações temporais. Uma série incompleta não deve ser apresentada como se garantisse o extremo diário. As regras para aceitar, sinalizar ou rejeitar estatísticas com cobertura parcial serão implementadas no módulo de cálculo, não presumidas pelo tipo.
+
+As flags `insufficient_coverage` e `derived_from_suspect_data` permitem registrar limitações de qualidade sem apagar o resultado ou a sua proveniência.
 
 O modelo legado em `types/station.ts` permanece em uso pelo dashboard. A integração Meteostat foi documentada como possível fonte complementar, mas não é necessária para o primeiro fluxo real.
 
