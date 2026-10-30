@@ -3,12 +3,12 @@
  * O modelo legado continua atendendo ao dashboard durante a transição.
  */
 
-export type DataSourceProvider = "INMET" | "REDEMET" | "OTHER";
+export type DataSourceProvider = "INMET" | "REDEMET" | "METEOSTAT" | "OTHER";
 
 export type MeteorologicalVariable =
   | "air_temperature"
   | "relative_humidity"
-  | "station_pressure"
+  | "sea_level_pressure"
   | "precipitation"
   | "wind_speed"
   | "wind_direction"
