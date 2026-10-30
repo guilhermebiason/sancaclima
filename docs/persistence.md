@@ -17,7 +17,7 @@ Após atualizar a branch, instale as dependências e atualize o lockfile:
 npm install
 ```
 
-A variável `DATABASE_URL` deve ser configurada apenas no ambiente de servidor. Não use prefixo `NEXT_PUBLIC_`, não a inclua no Git e não importe o pool em componentes client-side. Para Neon, prefira a connection string com pooling fornecida pelo painel. O pool usa TLS com validação de certificado e limita o máximo de conexões a cinco.
+A variável `DATABASE_URL` deve ser configurada apenas no ambiente de servidor. Não use prefixo `NEXT_PUBLIC_`, não a inclua no Git e não importe o pool em componentes client-side. Para Neon, prefira a connection string com pooling fornecida pelo painel. O pool usa TLS com validação de certificado e limita o máximo de conexões a cinco. Para um PostgreSQL local sem TLS, configure `DATABASE_SSL=false` apenas no ambiente local.
 
 ## Migração inicial
 
@@ -81,7 +81,7 @@ Para importar outro CSV, informe o caminho como argumento:
 npm run db:import:inmet-a711 -- "C:\\dados\\estacao.csv"
 ```
 
-O comando executa parser, normalização, controle de qualidade, cálculos de ponto de orvalho/resumos e persistência em uma transação. Ele não é uma rotina automática nem deve ser exposto como endpoint público.
+O comando executa parser, normalização, controle de qualidade, cálculos de ponto de orvalho/resumos, persistência em uma transação e leitura de volta. Ele confere a quantidade recuperada e a preservação das 80 radiações negativas sinalizadas. Ele não é uma rotina automática nem deve ser exposto como endpoint público.
 
 ## Decisões de modelagem
 
