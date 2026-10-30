@@ -1,4 +1,4 @@
-import type { MeteorologicalVariable } from "@/types/meteorology";
+import type { MeteorologicalVariable } from "../../../../types/meteorology";
 
 export interface InmetStationMetadata {
   name: string;
@@ -37,34 +37,10 @@ export const INMET_VARIABLE_MAP: Record<
   keyof InmetHourlyValues,
   { variable: MeteorologicalVariable; unit: string; aggregation: "hourly" | "accumulated" }
 > = {
-  precipitation: {
-    variable: "precipitation",
-    unit: "mm",
-    aggregation: "accumulated",
-  },
-  solarRadiation: {
-    variable: "solar_radiation",
-    unit: "kJ/m²",
-    aggregation: "accumulated",
-  },
-  airTemperature: {
-    variable: "air_temperature",
-    unit: "°C",
-    aggregation: "hourly",
-  },
-  relativeHumidity: {
-    variable: "relative_humidity",
-    unit: "%",
-    aggregation: "hourly",
-  },
-  windDirection: {
-    variable: "wind_direction",
-    unit: "°",
-    aggregation: "hourly",
-  },
-  windSpeed: {
-    variable: "wind_speed",
-    unit: "m/s",
-    aggregation: "hourly",
-  },
+  precipitation: { variable: "precipitation", unit: "mm", aggregation: "accumulated" },
+  solarRadiation: { variable: "solar_radiation", unit: "kJ/m²", aggregation: "accumulated" },
+  airTemperature: { variable: "air_temperature", unit: "°C", aggregation: "hourly" },
+  relativeHumidity: { variable: "relative_humidity", unit: "%", aggregation: "hourly" },
+  windDirection: { variable: "wind_direction", unit: "°", aggregation: "hourly" },
+  windSpeed: { variable: "wind_speed", unit: "m/s", aggregation: "hourly" },
 };
