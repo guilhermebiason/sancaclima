@@ -5,7 +5,7 @@ import { calculateDailyMeteorologicalSummaries } from "../lib/meteorology/calcul
 import { normalizeInmetCsv } from "../lib/meteorology/providers/inmet/normalizer";
 import { parseInmetHourlyCsv } from "../lib/meteorology/providers/inmet/parser";
 import { closePostgresPool, getPostgresPool } from "../lib/meteorology/persistence/postgres-pool";
-import { persistInmetImport } from "../lib/meteorology/persistence/postgres-repository";
+import { persistInmetImport, readMeteorologicalObservations } from "../lib/meteorology/persistence/postgres-repository";
 
 const defaultFixture = resolve(
   process.cwd(),
@@ -46,8 +46,9 @@ async function main(): Promise<void> {
     rawPayload: record.values as unknown as Record<string, unknown>,
   }));
 
+  const pool = getPostgresPool();
   const result = await persistInmetImport({
-    pool: getPostgresPool(),
+    pool,
     dataSource: normalized.dataSource,
     station: normalized.station,
     observations: [...normalized.observations, ...derived],
