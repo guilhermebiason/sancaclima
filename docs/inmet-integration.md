@@ -50,6 +50,16 @@ O portal BDMEP permite escolher ponto ou vírgula como separador decimal. O pars
 
 A unidade e a definição exata da medição devem permanecer associadas à variável. Não converter velocidade do vento para km/h nesta etapa.
 
+## Estatísticas e indicadores
+
+O modelo canônico mantém a variável independente da estatística. Assim, temperatura mínima, máxima e média usam `variable: "air_temperature"` e distinguem-se por `statistic: "minimum" | "maximum" | "mean"`. Resultados agregados usam `aggregation: "daily"`, informam `periodStart` e `periodEnd`, e registram `method: "calculated"`.
+
+Os campos `coverage.expectedRecords`, `coverage.availableRecords` e `coverage.completenessRatio` registram a completude da série usada no cálculo. A política para cobertura parcial deverá ser definida no módulo de cálculo e refletida nas flags de qualidade.
+
+**Limitação importante:** calcular mínima e máxima a partir das temperaturas horárias produz extremos observados na série horária. Esses valores não devem ser rotulados como extremos oficiais diários, pois podem não capturar extremos ocorridos entre os horários amostrados. Para extremos oficiais, será necessário ingerir o produto diário correspondente do INMET, quando disponível.
+
+Para agregações diárias locais, o período deve respeitar o fuso `America/Sao_Paulo`; os limites efetivos devem ser armazenados em UTC. Não agrupar por data UTC sem conversão explícita para o dia local.
+
 ## Auditoria da amostra A711
 
 Arquivo recebido: `dados_A711_H_2026-10-22_2026-10-29.csv`.
@@ -72,7 +82,7 @@ Os horários dos arquivos horários do INMET são tratados como UTC. O parser co
 - `parser.ts`: leitura dos metadados, cabeçalhos, datas e números.
 - `normalizer.ts`: conversão para os contratos canônicos em `types/meteorology.ts`.
 - `quality-control.ts`: flags iniciais sem apagar os valores originais.
-- `tests/inmet/parser.test.ts`: testes automatizados de parsing, normalização, sentinelas, timestamps e qualidade.
+- `tests/inmet/parser.test.ts`: testes automatizados de parsing, normalização, sentinelas, timestamps, qualidade e compatibilidade do modelo com estatísticas diárias.
 
 ### Executar os testes
 
