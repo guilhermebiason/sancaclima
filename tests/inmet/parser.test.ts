@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { MeteorologicalObservation } from "../../types/meteorology";
 import { parseInmetHourlyCsv } from "../../lib/meteorology/providers/inmet/parser";
 import { normalizeInmetCsv } from "../../lib/meteorology/providers/inmet/normalizer";
 
@@ -99,4 +100,49 @@ test("identifica timestamps duplicados sem remover registros", () => {
   assert.equal(temperatures.length, 2);
   assert.equal(new Set(temperatures.map((item) => item.id)).size, 2);
   assert.ok(temperatures.every((item) => item.qualityFlags.includes("duplicate")));
+});
+
+test("modelo aceita observação horária e estatística diária calculada", () => {
+  const hourly: MeteorologicalObservation = {
+    id: "hourly-1",
+    stationId: "INMET:A711",
+    sourceId: "inmet-bdmep",
+    variable: "air_temperature",
+    value: 21.7,
+    unit: "°C",
+    observedAt: "2026-10-22T12:00:00.000Z",
+    receivedAt: "2026-10-22T13:00:00.000Z",
+    aggregation: "hourly",
+    method: "measured",
+    quality: "valid",
+    qualityFlags: [],
+  };
+
+  const dailyMinimum: MeteorologicalObservation = {
+    id: "daily-minimum-1",
+    stationId: "INMET:A711",
+    sourceId: "inmet-bdmep",
+    variable: "air_temperature",
+    value: 16.2,
+    unit: "°C",
+    observedAt: "2026-10-22T23:59:59.999Z",
+    receivedAt: "2026-10-23T00:05:00.000Z",
+    aggregation: "daily",
+    statistic: "minimum",
+    periodStart: "2026-10-22T03:00:00.000Z",
+    periodEnd: "2026-10-23T03:00:00.000Z",
+    method: "calculated",
+    coverage: {
+      expectedRecords: 24,
+      availableRecords: 24,
+      completenessRatio: 1,
+    },
+    quality: "valid",
+    qualityFlags: [],
+  };
+
+  assert.equal(hourly.method, "measured");
+  assert.equal(dailyMinimum.statistic, "minimum");
+  assert.equal(dailyMinimum.aggregation, "daily");
+  assert.equal(dailyMinimum.coverage?.completenessRatio, 1);
 });
