@@ -2,19 +2,28 @@
 
 ## Objetivo
 
-Introduzir armazenamento PostgreSQL sem conectar ainda o dashboard ao banco. A primeira implantação deve aceitar o pipeline já validado com o CSV real INMET A711, preservar proveniência e permitir reprocessamento idempotente.
+Armazenar os dados processados pelo pipeline INMET em PostgreSQL, preservando proveniência, qualidade e possibilidade de reprocessamento. O dashboard permanece fora desta etapa até a validação do ciclo de gravação e leitura.
 
-## Banco escolhido
+## Banco e dependências
 
-PostgreSQL 15 ou superior. O schema é compatível com Neon, mas não depende de recursos proprietários do provedor. O desenvolvimento local pode usar qualquer instalação PostgreSQL compatível.
+- PostgreSQL 15+ (compatível com Neon).
+- Cliente Node.js: pacote `pg`.
+- Pool de conexões no servidor: `lib/meteorology/persistence/postgres-pool.ts`.
+- Repositório: `lib/meteorology/persistence/postgres-repository.ts`.
 
-Não adicionar credenciais, URLs de conexão ou arquivos `.env` ao Git. A conexão será configurada posteriormente por variável de ambiente no servidor, nunca no navegador.
+Após atualizar a branch, instale as dependências e atualize o lockfile:
+
+```powershell
+npm install
+```
+
+A variável `DATABASE_URL` deve ser configurada apenas no ambiente de servidor. Não use prefixo `NEXT_PUBLIC_`, não a inclua no Git e não importe o pool em componentes client-side. O pool usa TLS com validação de certificado e limita o máximo de conexões a cinco.
 
 ## Migração inicial
 
 Arquivo: `db/migrations/0001_initial_meteorological_storage.sql`.
 
-Aplicar uma vez em um banco vazio. A migração cria:
+Aplicar uma vez em um banco PostgreSQL vazio, usando o SQL Editor do provedor ou uma ferramenta de migração. A migração cria:
 
 | Tabela | Responsabilidade |
 |---|---|
@@ -22,41 +31,59 @@ Aplicar uma vez em um banco vazio. A migração cria:
 | `meteorological_stations` | Estações por identificador do provedor |
 | `ingestion_runs` | Execuções, estado e contagens do pipeline |
 | `raw_files` | Arquivo original recebido, hash SHA-256 e bytes originais |
-| `raw_records` | Linhas interpretadas do arquivo e payload bruto estruturado |
+| `raw_records` | Linhas interpretadas e payload bruto estruturado |
 | `meteorological_observations` | Observações normalizadas, derivadas e agregadas |
 
-O arquivo original é preservado em `BYTEA` nesta primeira fase. Para arquivos maiores ou retenção prolongada, o conteúdo poderá ser transferido para armazenamento de objetos sem alterar o modelo das observações.
+O arquivo original é preservado em `BYTEA`. Para arquivos maiores ou retenção prolongada, o conteúdo poderá migrar para armazenamento de objetos sem alterar o modelo das observações.
+
+## Fluxo implementado
+
+`persistInmetImport` executa uma transação única:
+
+1. Upsert da fonte e da estação.
+2. Criação de `ingestion_runs`.
+3. Preservação dos bytes originais em `raw_files` com SHA-256.
+4. Inserção dos registros brutos em lotes.
+5. Inserção/atualização das observações em lotes de até 300 linhas.
+6. Atualização das contagens e conclusão da execução.
+7. Commit; em erro, rollback e liberação da conexão.
+
+IDs determinísticos das observações permitem reimportação sem duplicar a série. As linhas brutas são identificadas por execução para manter a trilha de auditoria de cada importação. Valores suspeitos permanecem armazenados com suas flags. O arquivo original não é alterado.
+
+`readMeteorologicalObservations` consulta uma estação em intervalo semiaberto `[from, to)`, com filtro opcional de variáveis e limite máximo de 20.000 observações.
+
+## Testes
+
+O teste `tests/inmet/postgres-repository.test.ts` usa o fixture real A711 e um cliente PostgreSQL simulado para verificar:
+- transação, gravação do arquivo bruto e hash;
+- contagem e parâmetros de 1.398 observações (horárias originais, ponto de orvalho e estatísticas diárias);
+- preservação de valores suspeitos e flags;
+- vínculo das observações horárias com registros brutos;
+- rollback e liberação da conexão em caso de falha.
+
+Execute:
+
+```powershell
+npm run test:inmet
+```
+
+Esse teste valida a lógica de persistência e o contrato SQL com um cliente simulado. **Não substitui o teste com um PostgreSQL real.** A validação real ainda exige configurar um banco de desenvolvimento, aplicar a migração e executar o importador contra esse banco, conferindo as contagens e uma leitura de volta.
 
 ## Decisões de modelagem
 
-1. **Proveniência:** cada observação referencia a fonte e a estação; quando disponível, também referencia a execução de ingestão e a linha bruta de origem.
-2. **Tempo:** `observed_at`, `received_at`, `period_start` e `period_end` são `TIMESTAMPTZ`; a aplicação deve enviar timestamps ISO 8601 com offset explícito, normalmente UTC.
-3. **Ausências:** `value` aceita `NULL`; não converter ausência em zero.
+1. **Proveniência:** cada observação referencia fonte e estação; quando aplicável, também a execução e a linha bruta.
+2. **Tempo:** timestamps são `TIMESTAMPTZ`; a aplicação envia ISO 8601 com offset explícito, normalmente UTC.
+3. **Ausências:** `value` aceita `NULL`; ausência nunca é convertida em zero.
 4. **Qualidade:** status e flags são persistidos sem apagar valores suspeitos.
-5. **Cobertura:** os campos de cobertura são colunas explícitas para facilitar filtros e consultas.
-6. **Idempotência:** `id` determinístico é chave primária; `(source_id, source_record_id)` é único quando o identificador da fonte existe. Uma reimportação não deve criar uma segunda cópia da mesma observação.
-7. **Consultas:** índices priorizam estação, variável e instante, que são os filtros esperados para séries temporais do dashboard.
-8. **Segurança:** acesso ao banco exclusivamente no servidor. A chave de conexão nunca deve usar prefixo público nem ser importada por módulos client-side.
+5. **Cobertura:** campos de cobertura são colunas explícitas.
+6. **Idempotência:** IDs de observação são determinísticos; conflito atualiza o registro existente.
+7. **Consultas:** índices priorizam estação, variável e instante.
+8. **Segurança:** acesso ao banco exclusivamente no servidor; segredo nunca é exposto ao navegador.
 
-## Fluxo de gravação planejado
-
-1. Criar `ingestion_runs` com status `running`.
-2. Registrar a fonte e fazer upsert da estação pelo par `(source_id, source_station_id)`.
-3. Salvar os bytes originais em `raw_files` e calcular SHA-256.
-4. Salvar cada linha interpretada em `raw_records`, preservando número da linha e payload.
-5. Executar parser, normalizador, controle de qualidade e cálculos existentes.
-6. Gravar observações em transação, associando `ingestion_run_id` e `raw_record_id` quando aplicável.
-7. Atualizar contagens, horário de término e status da execução.
-8. Em erro, registrar a mensagem e marcar a execução como `failed` ou `partially_succeeded`, sem apagar o arquivo bruto.
-
-## Fora do escopo desta migração
+## Fora do escopo
 
 - Conectar o dashboard ou substituir mocks.
 - Criar coleta automática do INMET.
 - Criar endpoints públicos.
-- Configurar Neon ou armazenar segredos de produção.
+- Configurar credenciais de produção.
 - Definir retenção ou exclusão automática de dados brutos.
-
-## Próxima etapa
-
-Implementar o adaptador PostgreSQL no servidor, com transações e testes de reimportação. O teste de integração deverá demonstrar que o CSV A711 é persistido e lido de volta sem perda de valores, timestamps, qualidade, cobertura ou proveniência antes de qualquer integração com a interface.
