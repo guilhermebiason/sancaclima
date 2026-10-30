@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:inmet": "tsc --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --types node --outDir .test-build types/meteorology.ts lib/meteorology/providers/inmet/types.ts lib/meteorology/providers/inmet/parser.ts lib/meteorology/providers/inmet/quality-control.ts lib/meteorology/providers/inmet/normalizer.ts tests/inmet/parser.test.ts && node --test .test-build/tests/inmet/parser.test.js"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.4.1",
@@ -16,12 +17,12 @@
     "@radix-ui/react-popover": "^1.3.1",
     "@radix-ui/react-scroll-area": "^1.4.0",
     "@radix-ui/react-select": "^2.4.1",
-    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-separator": "^1.2.1",
     "@radix-ui/react-slider": "^1.6.1",
     "@radix-ui/react-slot": "^1.5.0",
     "@radix-ui/react-switch": "^1.4.1",
-    "@radix-ui/react-tabs": "^1.2.1",
-    "@radix-ui/react-tooltip": "^1.4.1",
+    "@radix-ui/react-tabs": "^2.4.1",
+    "@radix-ui/react-tooltip": "^1.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^14.8.0",
