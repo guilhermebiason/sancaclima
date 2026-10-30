@@ -23,6 +23,7 @@ export function normalizeInmetCsv(
   }
 
   const stationId = `INMET:${parsed.station.code}`;
+  const isInitialStation = parsed.station.code.toUpperCase() === "A711";
   const dataSource: MeteorologicalDataSource = {
     id: SOURCE_ID,
     provider: "INMET",
@@ -39,8 +40,7 @@ export function normalizeInmetCsv(
     latitude: parsed.station.latitude,
     longitude: parsed.station.longitude,
     elevationMeters: parsed.station.elevationMeters ?? undefined,
-    state: "SP",
-    municipality: "São Carlos",
+    ...(isInitialStation ? { state: "SP", municipality: "São Carlos" } : {}),
     active: parsed.station.situation?.toLowerCase() === "operante",
   };
 
@@ -51,7 +51,7 @@ export function normalizeInmetCsv(
     for (const key of valueKeys) {
       const mapping = INMET_VARIABLE_MAP[key];
       const value = record.values[key];
-      const sourceRecordId = `${parsed.station.code}:${record.observedAt}:${mapping.variable}`;
+      const sourceRecordId = `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}:${mapping.variable}`;
 
       observations.push({
         id: sourceRecordId,
