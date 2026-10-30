@@ -60,6 +60,29 @@ Os campos `coverage.expectedRecords`, `coverage.availableRecords` e `coverage.co
 
 Para agregações diárias locais, o período deve respeitar o fuso `America/Sao_Paulo`; os limites efetivos devem ser armazenados em UTC. Não agrupar por data UTC sem conversão explícita para o dia local.
 
+## Ponto de orvalho e agregações diárias
+
+O ponto de orvalho não é uma variável fornecida pelo CSV horário analisado. O ClimaBR o calcula como indicador derivado a partir de temperatura do ar e umidade relativa correspondentes ao mesmo timestamp.
+
+A implementação está em `lib/meteorology/calculations/daily-summaries.ts` e utiliza a aproximação de Magnus:
+
+```text
+a = 17,625
+b = 243,04 °C
+gamma = ln(UR / 100) + (a × T) / (b + T)
+Td = (b × gamma) / (a - gamma)
+```
+
+Onde T é a temperatura do ar em °C, UR é a umidade relativa em porcentagem e Td é o ponto de orvalho em °C. A aproximação é usada como estimativa operacional; não substitui uma medição direta nem métodos de maior precisão em aplicações especializadas. Umidade relativa igual a zero, valores ausentes ou entradas fora dos intervalos aceitos não geram ponto de orvalho.
+
+O resultado horário usa `variable: "dew_point_temperature"`, `method: "derived"` e mantém o timestamp das duas observações de entrada. As estatísticas diárias do ponto de orvalho são calculadas a partir desses resultados horários.
+
+O mesmo módulo calcula mínima, máxima e média diárias para temperatura do ar e ponto de orvalho. O dia é definido pelo fuso `America/Sao_Paulo`; os limites do período são armazenados em UTC. O fim do período é exclusivo. A cobertura esperada é calculada pela duração real do dia no fuso, permitindo dias de 23 ou 25 horas caso regras de horário de verão sejam aplicáveis.
+
+Por padrão, uma cobertura inferior a 75% é sinalizada com `insufficient_coverage` e o resumo permanece disponível com qualidade `suspect`. A política é configurável por `minimumCoverage`. Somente observações com qualidade `valid` participam dos cálculos; valores ausentes, duplicados ou suspeitos não são usados silenciosamente. A cobertura representa registros válidos disponíveis em relação aos horários esperados.
+
+As mínimas e máximas obtidas da série horária continuam sendo extremos amostrais da série, não extremos oficiais intrahorários do INMET.
+
 ## Auditoria da amostra A711
 
 Arquivo recebido: `dados_A711_H_2026-10-22_2026-10-29.csv`.
