@@ -17,7 +17,7 @@ Após atualizar a branch, instale as dependências e atualize o lockfile:
 npm install
 ```
 
-A variável `DATABASE_URL` deve ser configurada apenas no ambiente de servidor. Não use prefixo `NEXT_PUBLIC_`, não a inclua no Git e não importe o pool em componentes client-side. O pool usa TLS com validação de certificado e limita o máximo de conexões a cinco.
+A variável `DATABASE_URL` deve ser configurada apenas no ambiente de servidor. Não use prefixo `NEXT_PUBLIC_`, não a inclua no Git e não importe o pool em componentes client-side. Para Neon, prefira a connection string com pooling fornecida pelo painel. O pool usa TLS com validação de certificado e limita o máximo de conexões a cinco.
 
 ## Migração inicial
 
@@ -68,6 +68,20 @@ npm run test:inmet
 ```
 
 Esse teste valida a lógica de persistência e o contrato SQL com um cliente simulado. **Não substitui o teste com um PostgreSQL real.** A validação real ainda exige configurar um banco de desenvolvimento, aplicar a migração e executar o importador contra esse banco, conferindo as contagens e uma leitura de volta.
+
+Após aplicar a migração e configurar `DATABASE_URL`, importe o fixture A711:
+
+```powershell
+npm run db:import:inmet-a711
+```
+
+Para importar outro CSV, informe o caminho como argumento:
+
+```powershell
+npm run db:import:inmet-a711 -- "C:\\dados\\estacao.csv"
+```
+
+O comando executa parser, normalização, controle de qualidade, cálculos de ponto de orvalho/resumos e persistência em uma transação. Ele não é uma rotina automática nem deve ser exposto como endpoint público.
 
 ## Decisões de modelagem
 
