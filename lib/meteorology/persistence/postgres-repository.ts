@@ -87,8 +87,9 @@ export async function persistInmetImport(
   const startedAt = input.startedAt ?? input.receivedAt;
   const rawFileSha256 = createHash("sha256").update(input.rawFile).digest("hex");
   const rawFileId = randomUUID();
+  // Cada execução mantém sua própria cópia rastreável das linhas brutas.
   const rawRecordByTimestamp = new Map(
-    input.rawRecords.map((record) => [record.observedAt, record.id]),
+    input.rawRecords.map((record) => [record.observedAt, `${ingestionRunId}:${record.id}`]),
   );
 
   try {
@@ -166,7 +167,7 @@ export async function persistInmetImport(
     );
 
     const rawRows = input.rawRecords.map((record) => [
-      record.id,
+      rawRecordByTimestamp.get(record.observedAt),
       ingestionRunId,
       rawFileId,
       record.sourceLine,
