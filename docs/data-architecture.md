@@ -7,13 +7,13 @@ Evoluir o ClimaBR de um painel alimentado por dados simulados para uma plataform
 ## Fluxo proposto
 
 ```text
-Provedor de agregação (primeiro: Meteostat; estação 86845)
+Fonte primária: INMET / BDMEP (estação automática A711)
         |
         v
-Adaptador de aquisição
+Recebimento e preservação do CSV bruto
         |
         v
-Preservação do dado bruto + metadados da coleta
+Parser específico do formato INMET
         |
         v
 Normalização para o modelo canônico
@@ -44,33 +44,34 @@ Mapa, séries temporais, comparações e exportação
 
 ## Modelo canônico inicial
 
-Os contratos TypeScript estão em types/meteorology.ts:
+Os contratos TypeScript estão em `types/meteorology.ts`:
 
 - MeteorologicalDataSource: identificação do provedor/produto.
 - MeteorologicalStation: estação e seu identificador no provedor.
 - MeteorologicalObservation: variável, valor, unidade, tempos, agregação, qualidade e referência ao dado bruto.
 - IngestionRun: rastreabilidade da execução de aquisição.
 
-O modelo legado em types/station.ts permanece em uso pelo dashboard.\n\nA variável de pressão fornecida pelo endpoint horário do Meteostat (`pres`) é pressão ao nível do mar; por isso, o contrato canônico usa `sea_level_pressure`, não pressão da estação. A migração para o modelo canônico deve acontecer por etapas, sem substituir os dados simulados antes de existir uma integração real validada.
+O modelo legado em `types/station.ts` permanece em uso pelo dashboard. A integração Meteostat foi documentada como possível fonte complementar, mas não é necessária para o primeiro fluxo real.
 
-## Primeiro recorte: Meteostat — estação 86845 (São Carlos / A711)
+## Primeiro recorte: INMET — estação automática A711 (São Carlos)
 
-1. Documentar o produto/endpoint ou arquivo oficial que será utilizado.
-2. Definir quais variáveis e estações estão disponíveis nesse produto.
-3. Implementar um adaptador isolado para aquisição.
-4. Preservar uma amostra bruta com data de coleta e referência da origem.
-5. Normalizar uma amostra para MeteorologicalObservation.
-6. Aplicar validações básicas e registrar flags.
-7. Testar parsing, unidades, timestamps, ausências e duplicatas.
+1. Receber um CSV horário do BDMEP e preservar o arquivo original.
+2. Interpretar metadados, cabeçalhos, unidades e convenção temporal.
+3. Normalizar as seis variáveis iniciais para MeteorologicalObservation.
+4. Aplicar controle de qualidade preliminar, mantendo os valores de origem.
+5. Testar parsing, normalização, sentinelas, timestamps e duplicatas.
+6. Validar a amostra antes de definir persistência e integração com a interface.
+
+A implementação inicial está em `lib/meteorology/providers/inmet/`; as decisões e limitações estão em `docs/inmet-integration.md`.
 
 ## Critérios de aceite da primeira integração
 
-- Uma amostra horária da estação Meteostat 86845 é identificável e rastreável até a resposta bruta do provedor; a associação com a INMET A711 está documentada.
-- Horário original e conversão para UTC são documentados.
-- Unidade e variável são explícitas.
-- Ausências não são representadas como zero.
-- Registros suspeitos não são silenciosamente removidos.
-- Testes automatizados cobrem parsing e normalização.
+- Estação e arquivo de origem identificáveis.
+- Horário original tratado como UTC e conversão documentada.
+- Unidade e variável explícitas.
+- Ausências não representadas como zero.
+- Registros suspeitos preservados com flags.
+- Testes automatizados cobrindo parsing e normalização.
 - A interface atual continua operando com o provedor simulado até a integração ser validada.
 
 ## Fora do escopo desta etapa
