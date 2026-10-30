@@ -7,7 +7,7 @@ Evoluir o ClimaBR de um painel alimentado por dados simulados para uma plataform
 ## Fluxo proposto
 
 ```text
-Provedor (primeiro: INMET)
+Provedor de agregação (primeiro: Meteostat; estação 86845)
         |
         v
 Adaptador de aquisição
@@ -51,9 +51,9 @@ Os contratos TypeScript estão em types/meteorology.ts:
 - MeteorologicalObservation: variável, valor, unidade, tempos, agregação, qualidade e referência ao dado bruto.
 - IngestionRun: rastreabilidade da execução de aquisição.
 
-O modelo legado em types/station.ts permanece em uso pelo dashboard. A migração para o modelo canônico deve acontecer por etapas, sem substituir os dados simulados antes de existir uma integração real validada.
+O modelo legado em types/station.ts permanece em uso pelo dashboard.\n\nA variável de pressão fornecida pelo endpoint horário do Meteostat (`pres`) é pressão ao nível do mar; por isso, o contrato canônico usa `sea_level_pressure`, não pressão da estação. A migração para o modelo canônico deve acontecer por etapas, sem substituir os dados simulados antes de existir uma integração real validada.
 
-## Primeiro recorte: INMET
+## Primeiro recorte: Meteostat — estação 86845 (São Carlos / A711)
 
 1. Documentar o produto/endpoint ou arquivo oficial que será utilizado.
 2. Definir quais variáveis e estações estão disponíveis nesse produto.
@@ -65,7 +65,7 @@ O modelo legado em types/station.ts permanece em uso pelo dashboard. A migraçã
 
 ## Critérios de aceite da primeira integração
 
-- Uma amostra real do INMET é identificável e rastreável até sua origem.
+- Uma amostra horária da estação Meteostat 86845 é identificável e rastreável até a resposta bruta do provedor; a associação com a INMET A711 está documentada.
 - Horário original e conversão para UTC são documentados.
 - Unidade e variável são explícitas.
 - Ausências não são representadas como zero.
