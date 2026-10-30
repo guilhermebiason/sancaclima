@@ -54,6 +54,7 @@ test("normaliza seis variáveis com unidades e agregações explícitas", () => 
   assert.equal(normalized.station.id, "INMET:A711");
   assert.equal(normalized.dataSource.provider, "INMET");
   assert.equal(normalized.observations.length, 6);
+  assert.ok(normalized.observations.every((item) => item.method === "measured"));
   assert.equal(
     normalized.observations.find((item) => item.variable === "precipitation")?.aggregation,
     "accumulated",
