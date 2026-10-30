@@ -104,7 +104,7 @@ A implementação inicial está em `lib/meteorology/providers/inmet/`; as decis�
 - Implementar radar ou satélite como parte do pipeline de observações de superfície.
 - Conectar o dashboard ao banco antes de validar a persistência com o CSV real.
 
-PostgreSQL/PostGIS é uma opção para a etapa de persistência, mas a escolha e o schema físico devem ser definidos depois que o primeiro fluxo real estiver validado.
+PostgreSQL foi escolhido para a primeira etapa de persistência. PostGIS poderá ser avaliado posteriormente caso consultas geoespaciais mais avançadas se tornem necessárias.
 
 
 ## Persistência PostgreSQL — primeira versão
