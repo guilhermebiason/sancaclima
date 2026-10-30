@@ -58,9 +58,36 @@ async function main(): Promise<void> {
     receivedAt,
   });
 
+  const allObservations = [...normalized.observations, ...derived];
+  const timestamps = allObservations.map((observation) => Date.parse(observation.observedAt));
+  const from = new Date(Math.min(...timestamps)).toISOString();
+  const to = new Date(Math.max(...timestamps) + 1).toISOString();
+  const persisted = await readMeteorologicalObservations(pool, {
+    stationId: normalized.station.id,
+    from,
+    to,
+    limit: 5000,
+  });
+  if (persisted.length !== result.observationCount) {
+    throw new Error(`Read-back divergente: esperadas ${result.observationCount}, recuperadas ${persisted.length} observações.`);
+  }
+  const negativeRadiation = persisted.filter((observation) =>
+    observation.variable === "solar_radiation"
+    && observation.value !== null
+    && observation.value < 0,
+  );
+  if (negativeRadiation.length !== 80 || !negativeRadiation.every((observation) =>
+    observation.quality === "suspect"
+    && observation.qualityFlags.includes("outside_physical_range"),
+  )) {
+    throw new Error("A leitura de volta não preservou as 80 radiações negativas como suspeitas.");
+  }
+
   process.stdout.write(`${JSON.stringify({
     status: "success",
     station: normalized.station.id,
+    readBackCount: persisted.length,
+    negativeRadiationPreserved: negativeRadiation.length,
     ...result,
   }, null, 2)}\n`);
 }
