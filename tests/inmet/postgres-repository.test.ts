@@ -74,7 +74,7 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   assert.equal(result.rawFileSha256.length, 64);
   assert.ok(fake.wasReleased());
   assert.equal(fake.calls[0].sql, "BEGIN");
-  assert.equal(fake.calls.at(-1)?.sql, "COMMIT");
+  assert.equal(fake.calls[fake.calls.length - 1]?.sql, "COMMIT");
   assert.equal(fake.calls.filter((call) => call.sql.includes("INSERT INTO raw_records")).length, 1);
 
   const observationBatches = fake.calls.filter((call) =>
@@ -90,7 +90,9 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   assert.ok(negativeRadiation);
   assert.ok(persistedValues.includes(negativeRadiation.value));
   assert.ok(persistedValues.includes("suspect"));
-  assert.ok(persistedValues.includes("outside_physical_range"));
+  assert.ok(persistedValues.some((value) =>
+    Array.isArray(value) && value.includes("outside_physical_range"),
+  ));
   assert.ok(persistedValues.includes(`${result.ingestionRunId}:INMET:A711:2026-10-22T03:00:00.000Z`));
 });
 
