@@ -63,6 +63,7 @@ export function normalizeInmetCsv(
         observedAt: record.observedAt,
         receivedAt,
         aggregation: mapping.aggregation,
+        method: "measured",
         quality: "pending",
         qualityFlags: [],
         sourceRecordId,
