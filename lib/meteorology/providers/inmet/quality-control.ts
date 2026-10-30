@@ -2,7 +2,7 @@ import type {
   MeteorologicalObservation,
   QualityFlag,
   QualityStatus,
-} from "@/types/meteorology";
+} from "../../../../types/meteorology";
 
 const PHYSICAL_RANGES: Record<string, [number, number]> = {
   air_temperature: [-90, 60],
@@ -46,16 +46,16 @@ export function applyInmetQualityControl(
   const lastTimestampByVariable = new Map<string, string>();
 
   observations.forEach((observation, index) => {
-    const duplicateKey = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
-    const group = duplicateGroups.get(duplicateKey) ?? [];
+    const key = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
+    const group = duplicateGroups.get(key) ?? [];
     group.push(index);
-    duplicateGroups.set(duplicateKey, group);
+    duplicateGroups.set(key, group);
   });
 
-  return observations.map((observation, index) => {
+  return observations.map((observation) => {
     const flags = [...observation.qualityFlags];
-    const duplicateKey = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
-    if ((duplicateGroups.get(duplicateKey)?.length ?? 0) > 1) flags.push("duplicate");
+    const key = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
+    if ((duplicateGroups.get(key)?.length ?? 0) > 1) flags.push("duplicate");
 
     const previousTimestamp = lastTimestampByVariable.get(observation.variable);
     if (previousTimestamp && observation.observedAt < previousTimestamp) {
