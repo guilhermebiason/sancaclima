@@ -2,7 +2,7 @@ import type {
   MeteorologicalDataSource,
   MeteorologicalObservation,
   MeteorologicalStation,
-} from "@/types/meteorology";
+} from "../../../../types/meteorology";
 import { INMET_VARIABLE_MAP, type InmetHourlyValues, type ParsedInmetCsv } from "./types";
 import { applyInmetQualityControl } from "./quality-control";
 
