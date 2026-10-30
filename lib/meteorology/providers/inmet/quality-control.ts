@@ -6,6 +6,7 @@ import type {
 
 const PHYSICAL_RANGES: Record<string, [number, number]> = {
   air_temperature: [-90, 60],
+  dew_point_temperature: [-100, 60],
   relative_humidity: [0, 100],
   precipitation: [0, 500],
   solar_radiation: [0, 5000],
