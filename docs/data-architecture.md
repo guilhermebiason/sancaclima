@@ -102,6 +102,15 @@ A implementação inicial está em `lib/meteorology/providers/inmet/`; as decis�
 - Substituir todos os dados do dashboard.
 - Construir uma plataforma completa de previsão.
 - Implementar radar ou satélite como parte do pipeline de observações de superfície.
-- Adotar banco de dados antes de definir e validar o contrato de ingestão.
+- Conectar o dashboard ao banco antes de validar a persistência com o CSV real.
 
 PostgreSQL/PostGIS é uma opção para a etapa de persistência, mas a escolha e o schema físico devem ser definidos depois que o primeiro fluxo real estiver validado.
+
+
+## Persistência PostgreSQL — primeira versão
+
+O schema inicial está em `db/migrations/0001_initial_meteorological_storage.sql` e é compatível com PostgreSQL 15+ e Neon. A documentação de tabelas, proveniência, idempotência e fluxo de gravação está em `docs/persistence.md`.
+
+A migração cria tabelas separadas para fontes, estações, execuções de ingestão, arquivos brutos, linhas brutas e observações meteorológicas. O CSV original é preservado em `BYTEA` nesta primeira versão; observações mantêm timestamps com fuso, unidades, agregação, estatística, cobertura, qualidade e referências de origem.
+
+A existência do schema não significa que a persistência esteja implementada ou validada. O próximo passo é construir o adaptador PostgreSQL no servidor e testar a gravação e leitura do CSV A711, incluindo reimportação idempotente. O dashboard e os mocks permanecem inalterados até essa validação.
