@@ -258,8 +258,10 @@ export async function readMeteorologicalObservations(
   pool: Pool,
   input: ReadObservationsInput,
 ): Promise<MeteorologicalObservation[]> {
-  if (Date.parse(input.from) >= Date.parse(input.to)) {
-    throw new Error("O início do intervalo deve ser anterior ao fim.");
+  const fromTimestamp = Date.parse(input.from);
+  const toTimestamp = Date.parse(input.to);
+  if (!Number.isFinite(fromTimestamp) || !Number.isFinite(toTimestamp) || fromTimestamp >= toTimestamp) {
+    throw new Error("Informe timestamps ISO 8601 válidos e um início anterior ao fim.");
   }
   const limit = Math.min(Math.max(input.limit ?? 5000, 1), 20_000);
   const values: unknown[] = [input.stationId, input.from, input.to];
