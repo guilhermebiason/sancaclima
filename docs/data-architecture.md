@@ -70,6 +70,12 @@ As flags `insufficient_coverage` e `derived_from_suspect_data` permitem registra
 
 O modelo legado em `types/station.ts` permanece em uso pelo dashboard. A integração Meteostat foi documentada como possível fonte complementar, mas não é necessária para o primeiro fluxo real.
 
+### Indicadores derivados e estatísticas
+
+O modelo inclui `dew_point_temperature` como variável derivada. O ponto de orvalho horário é calculado com temperatura e umidade relativa pareadas pelo mesmo timestamp, usando a aproximação de Magnus. O método, as unidades e as restrições de entrada estão documentados em `docs/inmet-integration.md`.
+
+O módulo `lib/meteorology/calculations/daily-summaries.ts` produz o ponto de orvalho horário e resumos diários (mínima, máxima e média) para temperatura do ar e ponto de orvalho. O agrupamento diário respeita o fuso local configurado; os períodos são armazenados em UTC. Cada resumo informa cobertura e recebe a flag `insufficient_coverage` quando fica abaixo do limiar configurado.
+
 ## Primeiro recorte: INMET — estação automática A711 (São Carlos)
 
 1. Receber um CSV horário do BDMEP e preservar o arquivo original.
