@@ -7,7 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "test:inmet": "tsc --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --types node --outDir .test-build types/meteorology.ts lib/meteorology/providers/inmet/types.ts lib/meteorology/providers/inmet/parser.ts lib/meteorology/providers/inmet/quality-control.ts lib/meteorology/providers/inmet/normalizer.ts tests/inmet/parser.test.ts && node --test .test-build/tests/inmet/parser.test.js"
+    "test:inmet": "tsc --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --types node --outDir .test-build types/meteorology.ts lib/meteorology/providers/inmet/types.ts lib/meteorology/providers/inmet/parser.ts lib/meteorology/providers/inmet/quality-control.ts lib/meteorology/providers/inmet/normalizer.ts lib/meteorology/calculations/daily-summaries.ts tests/inmet/parser.test.ts tests/inmet/daily-summaries.test.ts && node --test .test-build/tests/inmet/parser.test.js .test-build/tests/inmet/daily-summaries.test.js"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.4.1",
