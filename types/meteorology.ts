@@ -7,6 +7,7 @@ export type DataSourceProvider = "INMET" | "REDEMET" | "METEOSTAT" | "OTHER";
 
 export type MeteorologicalVariable =
   | "air_temperature"
+  | "dew_point_temperature"
   | "relative_humidity"
   | "sea_level_pressure"
   | "precipitation"
