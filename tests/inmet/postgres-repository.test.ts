@@ -91,7 +91,7 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   assert.ok(persistedValues.includes(negativeRadiation.value));
   assert.ok(persistedValues.includes("suspect"));
   assert.ok(persistedValues.includes("outside_physical_range"));
-  assert.ok(persistedValues.includes("INMET:A711:2026-10-22T03:00:00.000Z"));
+  assert.ok(persistedValues.includes(`${result.ingestionRunId}:INMET:A711:2026-10-22T03:00:00.000Z`));
 });
 
 test("faz rollback e libera a conexão quando uma gravação falha", async () => {
