@@ -16,7 +16,7 @@ export function getPostgresPool(): Pool {
 
   pool = new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: true },
+    ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: true },
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
