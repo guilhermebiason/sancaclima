@@ -118,7 +118,10 @@ CREATE TABLE meteorological_observations (
   CHECK (
     (coverage_expected_records IS NULL AND coverage_available_records IS NULL AND coverage_completeness_ratio IS NULL)
     OR (
-      coverage_expected_records > 0
+      coverage_expected_records IS NOT NULL
+      AND coverage_available_records IS NOT NULL
+      AND coverage_completeness_ratio IS NOT NULL
+      AND coverage_expected_records > 0
       AND coverage_available_records >= 0
       AND coverage_available_records <= coverage_expected_records
       AND coverage_completeness_ratio BETWEEN 0 AND 1
