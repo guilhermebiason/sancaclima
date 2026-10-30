@@ -15,6 +15,33 @@ export type MeteorologicalVariable =
   | "solar_radiation";
 
 export type ObservationAggregation = "instantaneous" | "hourly" | "daily" | "accumulated";
+
+/**
+ * Estatística representada por uma observação.
+ * Ausência significa que o registro representa o valor fornecido pela fonte,
+ * sem uma estatística adicional calculada pelo ClimaBR.
+ */
+export type ObservationStatistic =
+  | "minimum"
+  | "maximum"
+  | "mean"
+  | "sum"
+  | "range"
+  | "count";
+
+/** Como o valor foi obtido, sem confundir cálculo com a origem dos dados. */
+export type ObservationMethod = "measured" | "calculated" | "derived";
+
+/**
+ * Cobertura temporal usada em uma agregação.
+ * completenessRatio varia de 0 a 1 (availableRecords / expectedRecords).
+ */
+export interface ObservationCoverage {
+  expectedRecords: number;
+  availableRecords: number;
+  completenessRatio: number;
+}
+
 export type QualityStatus = "pending" | "valid" | "suspect" | "invalid";
 
 export type QualityFlag =
@@ -24,7 +51,9 @@ export type QualityFlag =
   | "timestamp_out_of_order"
   | "stale"
   | "spatial_inconsistency"
-  | "source_warning";
+  | "source_warning"
+  | "insufficient_coverage"
+  | "derived_from_suspect_data";
 
 export interface MeteorologicalDataSource {
   id: string;
@@ -59,6 +88,15 @@ export interface MeteorologicalObservation {
   /** Instante em que o ClimaBR recebeu/importou o registro, em UTC. */
   receivedAt: string;
   aggregation: ObservationAggregation;
+  /** Estatística representada, como mínima, máxima ou média. */
+  statistic?: ObservationStatistic;
+  /** Limites do período considerado, em ISO 8601 UTC. */
+  periodStart?: string;
+  periodEnd?: string;
+  /** Medido na fonte, calculado por agregação ou derivado de outras variáveis. */
+  method?: ObservationMethod;
+  /** Cobertura dos registros usados em uma agregação temporal. */
+  coverage?: ObservationCoverage;
   quality: QualityStatus;
   qualityFlags: QualityFlag[];
   rawRecordId?: string;
