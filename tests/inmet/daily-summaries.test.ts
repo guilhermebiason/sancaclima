@@ -100,6 +100,56 @@ test("sinaliza cobertura incompleta sem ocultar a estatística calculada", () =>
   assert.ok(minimum?.qualityFlags.includes("insufficient_coverage"));
 });
 
+
+test("considera suficiente a cobertura exatamente no limite de 75%", () => {
+  const input = Array.from({ length: 18 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+
+  const dailyTemperature = result.filter((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily",
+  );
+
+  assert.equal(dailyTemperature.length, 3);
+  assert.ok(dailyTemperature.every(
+    (item) => item.coverage?.completenessRatio === 0.75,
+  ));
+  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
+  assert.ok(dailyTemperature.every(
+    (item) => !item.qualityFlags.includes("insufficient_coverage"),
+  ));
+});
+
+test("considera suficiente a cobertura de 87,5%", () => {
+  const input = Array.from({ length: 21 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+
+  const dailyTemperature = result.filter((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily",
+  );
+
+  assert.equal(dailyTemperature.length, 3);
+  assert.ok(dailyTemperature.every(
+    (item) => item.coverage?.completenessRatio === 0.875,
+  ));
+  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
+  assert.ok(dailyTemperature.every(
+    (item) => !item.qualityFlags.includes("insufficient_coverage"),
+  ));
+});
+
+
 test("não usa observações suspeitas para derivar ponto de orvalho", () => {
   const input = hourlyPair(0, 20, 60).map((item) =>
     item.variable === "relative_humidity"
