@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test:meteorology": "tsc --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --strict --skipLibCheck --types node --outDir .test-build types/meteorology.ts lib/meteorology/persistence/postgres-repository.ts lib/meteorology/services/observation-service.ts lib/meteorology/services/query-validation.ts tests/meteorology/observation-service.test.ts tests/meteorology/query-validation.test.ts && node --test .test-build/tests/meteorology/observation-service.test.js .test-build/tests/meteorology/query-validation.test.js",
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",

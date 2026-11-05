@@ -250,6 +250,8 @@ export interface ReadObservationsInput {
   from: string;
   to: string;
   variables?: string[];
+  aggregations?: string[];
+  qualities?: string[];
   limit?: number;
 }
 
@@ -265,25 +267,40 @@ export async function readMeteorologicalObservations(
   }
   const limit = Math.min(Math.max(input.limit ?? 5000, 1), 20_000);
   const values: unknown[] = [input.stationId, input.from, input.to];
-  let variableFilter = "";
-  if (input.variables?.length) {
-    values.push(input.variables);
-    variableFilter = ` AND variable = ANY($${values.length}::text[])`;
-  }
-  values.push(limit);
 
-  const result = await pool.query(
-    `SELECT id, station_id, source_id, variable, value, unit,
-            observed_at, received_at, aggregation, statistic,
-            period_start, period_end, method,
-            coverage_expected_records, coverage_available_records,
-            coverage_completeness_ratio, quality, quality_flags,
-            raw_record_id, source_record_id
-     FROM meteorological_observations
-     WHERE station_id = $1 AND observed_at >= $2 AND observed_at < $3
-       ${variableFilter}
-     ORDER BY observed_at ASC, variable ASC, statistic ASC
-     LIMIT $${values.length}`,
+let filters = "";
+
+if (input.variables?.length) {
+  values.push(input.variables);
+  filters += ` AND variable = ANY($${values.length}::text[])`;
+}
+
+if (input.aggregations?.length) {
+  values.push(input.aggregations);
+  filters += ` AND aggregation = ANY($${values.length}::text[])`;
+}
+
+if (input.qualities?.length) {
+  values.push(input.qualities);
+  filters += ` AND quality = ANY($${values.length}::text[])`;
+}
+
+values.push(limit);
+
+const result = await pool.query(
+  `SELECT id, station_id, source_id, variable, value, unit,
+          observed_at, received_at, aggregation, statistic,
+          period_start, period_end, method,
+          coverage_expected_records, coverage_available_records,
+          coverage_completeness_ratio, quality, quality_flags,
+          raw_record_id, source_record_id
+   FROM meteorological_observations
+   WHERE station_id = $1
+     AND observed_at >= $2
+     AND observed_at < $3
+     ${filters}
+   ORDER BY observed_at ASC, variable ASC, statistic ASC
+   LIMIT $${values.length}`,
     values,
   );
 
@@ -301,13 +318,17 @@ export async function readMeteorologicalObservations(
     ...(row.period_start ? { periodStart: new Date(row.period_start).toISOString() } : {}),
     ...(row.period_end ? { periodEnd: new Date(row.period_end).toISOString() } : {}),
     ...(row.method ? { method: row.method } : {}),
-    ...(row.coverage_expected_records !== null ? {
-      coverage: {
-        expectedRecords: Number(row.coverage_expected_records),
-        availableRecords: Number(row.coverage_available_records),
-        completenessRatio: Number(row.coverage_completeness_ratio),
-      },
-    } : {}),
+    ...(row.coverage_expected_records !== null
+      && row.coverage_available_records !== null
+      && row.coverage_completeness_ratio !== null
+      ? {
+          coverage: {
+            expectedRecords: Number(row.coverage_expected_records),
+            availableRecords: Number(row.coverage_available_records),
+            completenessRatio: Number(row.coverage_completeness_ratio),
+          },
+        }
+      : {}),
     quality: row.quality,
     qualityFlags: row.quality_flags,
     ...(row.raw_record_id ? { rawRecordId: row.raw_record_id } : {}),
