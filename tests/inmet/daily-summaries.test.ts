@@ -163,3 +163,93 @@ test("não usa observações suspeitas para derivar ponto de orvalho", () => {
 
   assert.equal(result.filter((item) => item.variable === "dew_point_temperature").length, 0);
 });
+
+test("atribui a precipitação encerrada à meia-noite ao dia local anterior", () => {
+  const input: MeteorologicalObservation[] = [
+    {
+      id: "precipitation-midnight",
+      stationId: "INMET:A711",
+      sourceId: "inmet-bdmep",
+      variable: "precipitation",
+      value: 2.5,
+      unit: "mm",
+      observedAt: "2026-10-22T03:00:00.000Z",
+      receivedAt: RECEIVED_AT,
+      aggregation: "accumulated",
+      method: "measured",
+      quality: "valid",
+      qualityFlags: [],
+    },
+  ];
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    timeZone: "America/Sao_Paulo",
+    receivedAt: RECEIVED_AT,
+  });
+
+  const precipitation = result.find((item) =>
+    item.variable === "precipitation"
+    && item.aggregation === "daily"
+    && item.statistic === "sum",
+  );
+
+  assert.ok(precipitation);
+  assert.equal(precipitation.value, 2.5);
+  assert.equal(precipitation.unit, "mm");
+  assert.equal(precipitation.periodStart, "2026-10-21T03:00:00.000Z");
+  assert.equal(precipitation.periodEnd, "2026-10-22T03:00:00.000Z");
+  assert.equal(precipitation.quality, "suspect");
+  assert.equal(precipitation.coverage?.expectedRecords, 24);
+  assert.equal(precipitation.coverage?.availableRecords, 1);
+});
+
+test("exclui precipitação suspeita da soma e da cobertura diária", () => {
+  const input: MeteorologicalObservation[] = [
+    {
+      id: "precipitation-valid",
+      stationId: "INMET:A711",
+      sourceId: "inmet-bdmep",
+      variable: "precipitation",
+      value: 2.5,
+      unit: "mm",
+      observedAt: "2026-10-22T04:00:00.000Z",
+      receivedAt: RECEIVED_AT,
+      aggregation: "accumulated",
+      method: "measured",
+      quality: "valid",
+      qualityFlags: [],
+    },
+    {
+      id: "precipitation-suspect",
+      stationId: "INMET:A711",
+      sourceId: "inmet-bdmep",
+      variable: "precipitation",
+      value: 10,
+      unit: "mm",
+      observedAt: "2026-10-22T05:00:00.000Z",
+      receivedAt: RECEIVED_AT,
+      aggregation: "accumulated",
+      method: "measured",
+      quality: "suspect",
+      qualityFlags: ["outside_physical_range"],
+    },
+  ];
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    timeZone: "America/Sao_Paulo",
+    receivedAt: RECEIVED_AT,
+  });
+
+  const precipitation = result.find((item) =>
+    item.variable === "precipitation"
+    && item.aggregation === "daily"
+    && item.statistic === "sum",
+  );
+
+  assert.ok(precipitation);
+  assert.equal(precipitation.value, 2.5);
+  assert.equal(precipitation.coverage?.expectedRecords, 24);
+  assert.equal(precipitation.coverage?.availableRecords, 1);
+  assert.equal(precipitation.quality, "suspect");
+  assert.ok(precipitation.qualityFlags.includes("insufficient_coverage"));
+});

@@ -21,8 +21,8 @@ function loadRealCsvFixture(): string {
 function daily(
   observations: ReturnType<typeof calculateDailyMeteorologicalSummaries>,
   date: string,
-  variable: "air_temperature" | "dew_point_temperature",
-  statistic: "minimum" | "maximum" | "mean",
+  variable: "air_temperature" | "dew_point_temperature" | "precipitation",
+  statistic: "minimum" | "maximum" | "mean" | "sum",
 ) {
   return observations.find((observation) =>
     observation.aggregation === "daily"
@@ -69,7 +69,7 @@ test("processa o CSV real A711 e confere os resultados de referência", () => {
   assert.ok(hourlyDewPoints.every((observation) =>
     observation.method === "derived" && observation.quality === "valid",
   ));
-  assert.equal(dailySummaries.length, 9 * 2 * 3);
+assert.equal(dailySummaries.length, 9 * (2 * 3 + 1));
 
   const october21 = daily(
     result,
@@ -108,6 +108,20 @@ test("processa o CSV real A711 e confere os resultados de referência", () => {
     "dew_point_temperature",
     "mean",
   );
+
+  const october22Precipitation = daily(
+    result,
+    "2026-10-22",
+    "precipitation",
+    "sum",
+  );
+
+  assert.ok(october22Precipitation);
+  assert.equal(october22Precipitation.value, 6.6);
+  assert.equal(october22Precipitation.unit, "mm");
+  assert.equal(october22Precipitation.coverage?.expectedRecords, 24);
+  assert.equal(october22Precipitation.coverage?.availableRecords, 24);
+  assert.equal(october22Precipitation.quality, "valid");
 
   assert.equal(october22Minimum?.value, 15.9);
   assert.equal(october22Maximum?.value, 25);

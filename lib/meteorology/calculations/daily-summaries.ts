@@ -190,12 +190,51 @@ function summarizeDay(
   ];
 }
 
+function summarizePrecipitationDay(
+  observations: MeteorologicalObservation[],
+  periodStart: Date,
+  periodEnd: Date,
+  receivedAt: string,
+  expectedRecords: number,
+  minimumCoverage: number,
+): MeteorologicalObservation[] {
+  const usable = observations.filter(isUsable);
+
+  if (usable.length === 0) return [];
+
+  const template = usable[0];
+  const availableRecords = new Set(
+    usable.map((item) => item.observedAt),
+  ).size;
+
+  const total = usable.reduce(
+    (sum, item) => sum + item.value,
+    0,
+  );
+
+  return [
+    dailyObservation(
+      template,
+      "sum",
+      total,
+      periodStart,
+      periodEnd,
+      receivedAt,
+      expectedRecords,
+      availableRecords,
+      minimumCoverage,
+    ),
+  ];
+}
+
 /**
- * Gera ponto de orvalho horário e estatísticas diárias de temperatura e ponto
- * de orvalho. Dias são definidos pelo fuso local; os limites são armazenados em UTC.
+ * Gera ponto de orvalho horário e resumos diários de temperatura,
+ * ponto de orvalho e precipitação. Os dias seguem o fuso local,
+ * enquanto os limites dos períodos são armazenados em UTC.
  *
- * Somente observações com qualidade "valid" entram nos cálculos. Assim, valores
- * ausentes, duplicados ou suspeitos não contaminam silenciosamente as estatísticas.
+ * Somente observações com qualidade "valid" entram nos cálculos.
+ * Valores ausentes, duplicados ou suspeitos não contaminam
+ * silenciosamente as estatísticas.
  */
 export function calculateDailyMeteorologicalSummaries(
   observations: MeteorologicalObservation[],
@@ -254,6 +293,30 @@ export function calculateDailyMeteorologicalSummaries(
     });
   }
 
+  const precipitationGroups = new Map<string, MeteorologicalObservation[]>();
+
+  for (const observation of observations) {
+    if (
+      observation.variable !== "precipitation"
+      || observation.aggregation !== "accumulated"
+    ) continue;
+
+    // O horário do INMET representa o fim da hora acumulada.
+    // O instante anterior ao encerramento identifica o dia local correto.
+    const intervalEnd = new Date(observation.observedAt);
+
+    if (!Number.isFinite(intervalEnd.getTime())) continue;
+
+    const lastInstantOfInterval = new Date(intervalEnd.getTime() - 1);
+    const date = localDateKey(lastInstantOfInterval.toISOString(), timeZone);
+
+    const key = `${observation.stationId}|${date}`;
+    const group = precipitationGroups.get(key) ?? [];
+
+    group.push(observation);
+    precipitationGroups.set(key, group);
+  }
+
   const dailyGroups = new Map<string, MeteorologicalObservation[]>();
   for (const observation of [...observations, ...dewPointHourly]) {
     if (
@@ -281,6 +344,26 @@ export function calculateDailyMeteorologicalSummaries(
       expectedRecords,
       minimumCoverage,
     ));
+  }
+
+  for (const [key, group] of precipitationGroups) {
+    const date = key.slice(key.lastIndexOf("|") + 1);
+    const { start, end } = localDayBounds(date, timeZone);
+
+    const expectedRecords = Math.round(
+      (end.getTime() - start.getTime()) / 3_600_000,
+    );
+
+    dailySummaries.push(
+      ...summarizePrecipitationDay(
+        group,
+        start,
+        end,
+        receivedAt,
+        expectedRecords,
+        minimumCoverage,
+      ),
+    );
   }
 
   return [...dewPointHourly, ...dailySummaries].sort((a, b) =>
