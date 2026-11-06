@@ -21,17 +21,36 @@ function assess(
 
   if (observation.value === null) {
     flags.push("missing_value");
-    return { quality: "invalid", qualityFlags: [...new Set(flags)] };
+
+    return {
+      quality: "invalid",
+      qualityFlags: [...new Set(flags)],
+    };
   }
 
   const range = PHYSICAL_RANGES[observation.variable];
-  if (range && (observation.value < range[0] || observation.value > range[1])) {
+
+  if (
+    range &&
+    (observation.value < range[0] || observation.value > range[1])
+  ) {
     flags.push("outside_physical_range");
   }
 
   const uniqueFlags = [...new Set(flags)];
+
+  let quality: QualityStatus;
+
+  if (observation.quality === "invalid") {
+    quality = "invalid";
+  } else if (uniqueFlags.length > 0 || observation.quality === "suspect") {
+    quality = "suspect";
+  } else {
+    quality = "valid";
+  }
+
   return {
-    quality: uniqueFlags.length > 0 ? "suspect" : "valid",
+    quality,
     qualityFlags: uniqueFlags,
   };
 }
@@ -44,27 +63,67 @@ export function applyInmetQualityControl(
   observations: MeteorologicalObservation[],
 ): MeteorologicalObservation[] {
   const duplicateGroups = new Map<string, number[]>();
-  const lastTimestampByVariable = new Map<string, string>();
+  const lastTimestampByStationVariable = new Map<string, number>();
 
   observations.forEach((observation, index) => {
-    const key = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
+    const key = [
+      observation.stationId,
+      observation.variable,
+      observation.observedAt,
+    ].join("|");
+
     const group = duplicateGroups.get(key) ?? [];
+
     group.push(index);
     duplicateGroups.set(key, group);
   });
 
   return observations.map((observation) => {
     const flags = [...observation.qualityFlags];
-    const key = `${observation.stationId}|${observation.variable}|${observation.observedAt}`;
-    if ((duplicateGroups.get(key)?.length ?? 0) > 1) flags.push("duplicate");
 
-    const previousTimestamp = lastTimestampByVariable.get(observation.variable);
-    if (previousTimestamp && observation.observedAt < previousTimestamp) {
+    const duplicateKey = [
+      observation.stationId,
+      observation.variable,
+      observation.observedAt,
+    ].join("|");
+
+    if ((duplicateGroups.get(duplicateKey)?.length ?? 0) > 1) {
+      flags.push("duplicate");
+    }
+
+    const stationVariableKey = [
+      observation.stationId,
+      observation.variable,
+    ].join("|");
+
+    const currentTimestamp = Date.parse(observation.observedAt);
+
+    const previousTimestamp =
+      lastTimestampByStationVariable.get(stationVariableKey);
+
+    if (
+      Number.isFinite(currentTimestamp) &&
+      previousTimestamp !== undefined &&
+      currentTimestamp < previousTimestamp
+    ) {
       flags.push("timestamp_out_of_order");
     }
-    lastTimestampByVariable.set(observation.variable, observation.observedAt);
 
-    const assessed = assess({ ...observation, qualityFlags: flags });
-    return { ...observation, ...assessed };
+    if (Number.isFinite(currentTimestamp)) {
+      lastTimestampByStationVariable.set(
+        stationVariableKey,
+        currentTimestamp,
+      );
+    }
+
+    const assessed = assess({
+      ...observation,
+      qualityFlags: flags,
+    });
+
+    return {
+      ...observation,
+      ...assessed,
+    };
   });
 }
