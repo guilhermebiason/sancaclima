@@ -66,6 +66,83 @@ async function insertObservationBatch(
 }
 
 /**
+ * Persiste exclusivamente observações calculadas ou derivadas.
+ *
+ * Não cria ingestion_runs, raw_files ou raw_records.
+ * Usa IDs determinísticos para atualizar registros derivados existentes.
+ */
+export async function persistDerivedObservations(
+  pool: Pool,
+  observations: MeteorologicalObservation[],
+): Promise<number> {
+  if (observations.length === 0) {
+    return 0;
+  }
+
+  for (const observation of observations) {
+    if (observation.method !== "calculated" && observation.method !== "derived") {
+      throw new Error(
+        `Persistência derivada rejeitada: observação ${observation.id} não é calculada ou derivada.`,
+      );
+    }
+
+    if (!observation.id || !observation.stationId || !observation.sourceId) {
+      throw new Error("Observação derivada sem identificadores obrigatórios.");
+    }
+
+    if (!Number.isFinite(Date.parse(observation.observedAt))
+      || !Number.isFinite(Date.parse(observation.receivedAt))) {
+      throw new Error(
+        `Observação derivada ${observation.id} possui timestamp inválido.`,
+      );
+    }
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const rows = observations.map((observation) => [
+      observation.id,
+      observation.stationId,
+      observation.sourceId,
+      null,
+      observation.variable,
+      observation.value,
+      observation.unit,
+      observation.observedAt,
+      observation.receivedAt,
+      observation.aggregation,
+      observation.statistic ?? null,
+      observation.periodStart ?? null,
+      observation.periodEnd ?? null,
+      observation.method,
+      observation.coverage?.expectedRecords ?? null,
+      observation.coverage?.availableRecords ?? null,
+      observation.coverage?.completenessRatio ?? null,
+      observation.quality,
+      observation.qualityFlags,
+      null,
+      null,
+    ]);
+
+    for (let offset = 0; offset < rows.length; offset += 300) {
+      await insertObservationBatch(client, rows.slice(offset, offset + 300));
+    }
+
+    await client.query("COMMIT");
+
+    return observations.length;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Persiste o arquivo original, linhas brutas e observações em uma única transação.
  * Reimportações atualizam observações com IDs determinísticos em vez de duplicá-las.
  */
