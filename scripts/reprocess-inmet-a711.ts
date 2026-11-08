@@ -109,10 +109,22 @@ async function main(): Promise<void> {
     derivedObservations,
   );
 
+  const derivedTimestamps = derivedObservations.map(
+    (observation) => Date.parse(observation.observedAt),
+  );
+
+  const verificationFrom = new Date(
+    Math.min(...derivedTimestamps),
+  ).toISOString();
+
+  const verificationTo = new Date(
+    Math.max(...derivedTimestamps) + 1,
+  ).toISOString();
+
   const readBack = await readMeteorologicalObservations(pool, {
     stationId: STATION_ID,
-    from,
-    to,
+    from: verificationFrom,
+    to: verificationTo,
     limit: MAX_OBSERVATIONS,
   });
 
