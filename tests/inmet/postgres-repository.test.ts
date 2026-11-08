@@ -22,8 +22,8 @@ const FIXTURE_PATH = resolve(
 
 function loadFixture(): { csv: string; bytes: Buffer } {
   const compressed = readFileSync(FIXTURE_PATH, "utf8").trim();
-  const bytes = gunzipSync(Buffer.from(compressed, "base64"));
-  return { csv: bytes.toString("utf8"), bytes };
+  const bytes = Buffer.from(compressed, "base64");
+  return { csv: gunzipSync(bytes).toString("utf8"), bytes };
 }
 
 function createFakePool() {
@@ -56,7 +56,7 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
     receivedAt: RECEIVED_AT,
   });
   const rawRecords = parsed.records.map((record) => ({
-    id: `${normalized.station.id}:${record.observedAt}`,
+    id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
     sourceLine: record.sourceLine,
     observedAt: record.observedAt,
     rawPayload: record.values as unknown as Record<string, unknown>,
@@ -70,7 +70,8 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
     observations: [...normalized.observations, ...derived],
     rawRecords,
     rawFile: bytes,
-    fileName: "dados_A711_H_2026-10-22_2026-10-29.csv",
+    fileName: "dados_A711_H_2026-10-22_2026-10-29.csv.gz",
+    mediaType: "application/gzip",
     receivedAt: RECEIVED_AT,
   });
 
@@ -89,6 +90,11 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   const persistedValues = observationBatches.flatMap((call) => call.values ?? []);
   assert.equal(persistedValues.length, result.observationCount * 21);
 
+  const rawFileInsert = fake.calls.find((call) => call.sql.includes("INSERT INTO raw_files"));
+  assert.ok(rawFileInsert);
+  assert.equal(rawFileInsert.values?.[3], "application/gzip");
+  assert.deepEqual(rawFileInsert.values?.[6], bytes);
+
   const negativeRadiation = normalized.observations.find((observation) =>
     observation.variable === "solar_radiation" && (observation.value ?? 0) < 0,
   );
@@ -98,7 +104,67 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   assert.ok(persistedValues.some((value) =>
     Array.isArray(value) && value.includes("outside_physical_range"),
   ));
-  assert.ok(persistedValues.includes(`${result.ingestionRunId}:INMET:A711:2026-10-22T03:00:00.000Z`));
+  const expectedRawRecordId = `${result.ingestionRunId}:A711:2026-10-22T03:00:00.000Z:line-${parsed.records[0].sourceLine}`;
+  assert.ok(persistedValues.includes(expectedRawRecordId));
+});
+
+
+test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", async () => {
+  const { csv, bytes } = loadFixture();
+  const lines = csv.split(/\r?\n/);
+  const headerIndex = lines.findIndex((line) => line.startsWith("Data Medicao;"));
+  assert.ok(headerIndex >= 0);
+  const firstRecord = lines[headerIndex + 1];
+  const duplicatedCsv = [
+    ...lines.slice(0, headerIndex + 1),
+    firstRecord,
+    firstRecord,
+    ...lines.slice(headerIndex + 2),
+  ].join("\n");
+
+  const parsed = parseInmetHourlyCsv(duplicatedCsv);
+  const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
+  const firstTimestamp = parsed.records[0].observedAt;
+  const duplicateRows = parsed.records.filter((record) => record.observedAt === firstTimestamp);
+  assert.equal(duplicateRows.length, 2);
+
+  const rawRecords = parsed.records.map((record) => ({
+    id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
+    sourceLine: record.sourceLine,
+    observedAt: record.observedAt,
+    rawPayload: record.values as unknown as Record<string, unknown>,
+  }));
+  assert.equal(new Set(rawRecords.map((record) => record.id)).size, parsed.records.length);
+
+  const fake = createFakePool();
+  await persistInmetImport({
+    pool: fake.pool,
+    dataSource: normalized.dataSource,
+    station: normalized.station,
+    observations: normalized.observations,
+    rawRecords,
+    rawFile: bytes,
+    fileName: "duplicated-source.csv.gz",
+    mediaType: "application/gzip",
+    receivedAt: RECEIVED_AT,
+  });
+
+  const rawInsert = fake.calls.find((call) => call.sql.includes("INSERT INTO raw_records"));
+  assert.ok(rawInsert);
+  const rawIds = (rawInsert.values ?? []).filter((_, index) => index % 6 === 0);
+  assert.equal(rawIds.length, parsed.records.length);
+  assert.equal(new Set(rawIds).size, parsed.records.length);
+
+  const observationInsert = fake.calls.find((call) => call.sql.includes("INSERT INTO meteorological_observations"));
+  assert.ok(observationInsert);
+  const params = observationInsert.values ?? [];
+  const linkedIds = new Set<string>();
+  for (let offset = 0; offset < params.length; offset += 21) {
+    if (params[offset + 7] === firstTimestamp && typeof params[offset + 19] === "string") {
+      linkedIds.add(params[offset + 19] as string);
+    }
+  }
+  assert.equal(linkedIds.size, 2);
 });
 
 test("faz rollback e libera a conexão quando uma gravação falha", async () => {
@@ -123,13 +189,14 @@ test("faz rollback e libera a conexão quando uma gravação falha", async () =>
       station: normalized.station,
       observations: normalized.observations,
       rawRecords: parsed.records.map((record) => ({
-        id: `${normalized.station.id}:${record.observedAt}`,
+        id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
         sourceLine: record.sourceLine,
         observedAt: record.observedAt,
         rawPayload: record.values as unknown as Record<string, unknown>,
       })),
       rawFile: bytes,
-      fileName: "dados_A711_H_2026-10-22_2026-10-29.csv",
+      fileName: "dados_A711_H_2026-10-22_2026-10-29.csv.gz",
+      mediaType: "application/gzip",
       receivedAt: RECEIVED_AT,
     }),
     /simulated database failure/,
