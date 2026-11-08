@@ -246,7 +246,7 @@ export async function persistInmetImport(
     );
 
     const rawRows = input.rawRecords.map((record) => [
-      rawRecordByTimestamp.get(record.observedAt),
+      `${ingestionRunId}:${record.id}`,
       ingestionRunId,
       rawFileId,
       record.sourceLine,
