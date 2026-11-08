@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { gunzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import test from "node:test";
 import type { Pool, PoolClient } from "pg";
 import { calculateDailyMeteorologicalSummaries } from "../../lib/meteorology/calculations/daily-summaries";
@@ -122,6 +122,7 @@ test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", asy
     ...lines.slice(headerIndex + 2),
   ].join("\n");
 
+  const duplicatedRawFile = gzipSync(Buffer.from(duplicatedCsv, "utf8"));
   const parsed = parseInmetHourlyCsv(duplicatedCsv);
   const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
   const firstTimestamp = parsed.records[0].observedAt;
@@ -143,7 +144,7 @@ test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", asy
     station: normalized.station,
     observations: normalized.observations,
     rawRecords,
-    rawFile: bytes,
+    rawFile: duplicatedRawFile,
     fileName: "duplicated-source.csv.gz",
     mediaType: "application/gzip",
     receivedAt: RECEIVED_AT,
