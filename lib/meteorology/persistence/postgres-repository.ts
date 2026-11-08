@@ -21,6 +21,7 @@ export interface PersistInmetImportInput {
   rawRecords: RawInmetRecord[];
   rawFile: Buffer;
   fileName: string;
+  mediaType?: string;
   receivedAt: string;
   startedAt?: string;
 }
@@ -165,8 +166,8 @@ export async function persistInmetImport(
   const rawFileSha256 = createHash("sha256").update(input.rawFile).digest("hex");
   const rawFileId = randomUUID();
   // Cada execução mantém sua própria cópia rastreável das linhas brutas.
-  const rawRecordByTimestamp = new Map(
-    input.rawRecords.map((record) => [record.observedAt, `${ingestionRunId}:${record.id}`]),
+  const rawRecordById = new Map(
+    input.rawRecords.map((record) => [record.id, `${ingestionRunId}:${record.id}`]),
   );
 
   try {
@@ -231,11 +232,12 @@ export async function persistInmetImport(
     await client.query(
       `INSERT INTO raw_files
        (id, ingestion_run_id, file_name, media_type, sha256, size_bytes, content, received_at)
-       VALUES ($1, $2, $3, 'text/csv', $4, $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         rawFileId,
         ingestionRunId,
         input.fileName,
+        input.mediaType ?? "text/csv",
         rawFileSha256,
         input.rawFile.length,
         input.rawFile,
@@ -284,7 +286,13 @@ export async function persistInmetImport(
       observation.coverage?.completenessRatio ?? null,
       observation.quality,
       observation.qualityFlags,
-      observation.rawRecordId ?? rawRecordByTimestamp.get(observation.observedAt) ?? null,
+      observation.rawRecordId ?? (
+        observation.method === "measured" && observation.sourceRecordId
+          ? rawRecordById.get(
+              observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":")),
+            ) ?? null
+          : null
+      ),
       observation.sourceRecordId ?? null,
     ]);
     for (let offset = 0; offset < observationRows.length; offset += 300) {
