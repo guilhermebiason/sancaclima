@@ -7,7 +7,12 @@ import type { Pool, PoolClient } from "pg";
 import { calculateDailyMeteorologicalSummaries } from "../../lib/meteorology/calculations/daily-summaries";
 import { normalizeInmetCsv } from "../../lib/meteorology/providers/inmet/normalizer";
 import { parseInmetHourlyCsv } from "../../lib/meteorology/providers/inmet/parser";
-import { persistInmetImport } from "../../lib/meteorology/persistence/postgres-repository";
+import {
+  persistDerivedObservations,
+  persistInmetImport,
+} from "../../lib/meteorology/persistence/postgres-repository";
+
+
 
 const RECEIVED_AT = "2026-10-30T00:00:00.000Z";
 const FIXTURE_PATH = resolve(
@@ -131,4 +136,137 @@ test("faz rollback e libera a conexão quando uma gravação falha", async () =>
   );
 
   assert.ok(fake.calls.some((call) => call.sql === "ROLLBACK"));
+});
+
+test("persiste observações derivadas sem criar novos registros brutos", async () => {
+  const { csv } = loadFixture();
+  const parsed = parseInmetHourlyCsv(csv);
+  const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
+
+  const derived = calculateDailyMeteorologicalSummaries(
+    normalized.observations,
+    {
+      timeZone: "America/Sao_Paulo",
+      receivedAt: RECEIVED_AT,
+    },
+  );
+
+  assert.ok(derived.length > 0);
+  assert.ok(
+    derived.every(
+      (observation) =>
+        observation.method === "calculated" ||
+        observation.method === "derived",
+    ),
+  );
+
+  const precipitationSummaries = derived.filter(
+    (observation) =>
+      observation.variable === "precipitation" &&
+      observation.aggregation === "daily",
+  );
+
+  assert.equal(precipitationSummaries.length, 9);
+
+  const fake = createFakePool();
+
+  const persistedCount = await persistDerivedObservations(
+    fake.pool,
+    derived,
+  );
+
+  assert.equal(persistedCount, derived.length);
+  assert.ok(fake.wasReleased());
+
+  assert.equal(fake.calls[0].sql, "BEGIN");
+  assert.equal(fake.calls[fake.calls.length - 1]?.sql, "COMMIT");
+
+  const inserts = fake.calls.filter((call) =>
+    call.sql.includes("INSERT INTO meteorological_observations"),
+  );
+
+  assert.ok(inserts.length > 0);
+
+  const allSql = fake.calls.map((call) => call.sql).join("\n");
+
+  assert.ok(!allSql.includes("INSERT INTO raw_files"));
+  assert.ok(!allSql.includes("INSERT INTO raw_records"));
+  assert.ok(!allSql.includes("INSERT INTO ingestion_runs"));
+
+  const persistedValues = inserts.flatMap(
+    (call) => call.values ?? [],
+  );
+
+  assert.ok(persistedValues.includes("calculated"));
+  assert.ok(persistedValues.includes("precipitation"));
+});
+
+test("rejeita observações medidas na persistência derivada", async () => {
+  const fake = createFakePool();
+
+  await assert.rejects(
+    persistDerivedObservations(fake.pool, [
+      {
+        id: "test-measured-observation",
+        stationId: "INMET:A711",
+        sourceId: "inmet-bdmep",
+        variable: "air_temperature",
+        value: 25,
+        unit: "°C",
+        observedAt: RECEIVED_AT,
+        receivedAt: RECEIVED_AT,
+        aggregation: "hourly",
+        method: "measured",
+        quality: "valid",
+        qualityFlags: [],
+      },
+    ]),
+    /não é calculada ou derivada/,
+  );
+
+  assert.equal(fake.calls.length, 0);
+  assert.equal(fake.wasReleased(), false);
+});
+
+test("faz rollback e libera a conexão quando a persistência derivada falha", async () => {
+  const { csv } = loadFixture();
+  const parsed = parseInmetHourlyCsv(csv);
+  const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
+
+  const derived = calculateDailyMeteorologicalSummaries(
+    normalized.observations,
+    {
+      timeZone: "America/Sao_Paulo",
+      receivedAt: RECEIVED_AT,
+    },
+  );
+
+  const fake = createFakePool();
+
+  const failingClient = {
+    query: async (sql: string, values?: unknown[]) => {
+      fake.calls.push({ sql, values });
+
+      if (sql.includes("INSERT INTO meteorological_observations")) {
+        throw new Error("simulated derived persistence failure");
+      }
+
+      return { rows: [], rowCount: 0 };
+    },
+    release: () => {
+      fake.client.release();
+    },
+  };
+
+  const pool = {
+    connect: async () => failingClient,
+  } as unknown as Pool;
+
+  await assert.rejects(
+    persistDerivedObservations(pool, derived),
+    /simulated derived persistence failure/,
+  );
+
+  assert.ok(fake.calls.some((call) => call.sql === "ROLLBACK"));
+  assert.ok(fake.wasReleased());
 });
