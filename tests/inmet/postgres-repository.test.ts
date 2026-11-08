@@ -104,13 +104,17 @@ test("persiste o CSV A711 em uma transação e prepara observações sem perda",
   assert.ok(persistedValues.some((value) =>
     Array.isArray(value) && value.includes("outside_physical_range"),
   ));
-  const expectedRawRecordId = `${result.ingestionRunId}:A711:2026-10-22T03:00:00.000Z:line-${parsed.records[0].sourceLine}`;
+  const sourceRecord = parsed.records.find(
+    (record) => record.observedAt === "2026-10-22T03:00:00.000Z",
+  );
+  assert.ok(sourceRecord);
+  const expectedRawRecordId = `${result.ingestionRunId}:A711:${sourceRecord.observedAt}:line-${sourceRecord.sourceLine}`;
   assert.ok(persistedValues.includes(expectedRawRecordId));
 });
 
 
 test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", async () => {
-  const { csv, bytes } = loadFixture();
+  const { csv } = loadFixture();
   const lines = csv.split(/\r?\n/);
   const headerIndex = lines.findIndex((line) => line.startsWith("Data Medicao;"));
   assert.ok(headerIndex >= 0);
