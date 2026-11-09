@@ -444,7 +444,7 @@ const result = await pool.query(
      )
      ${filters}
    ORDER BY observed_at ASC, variable ASC, statistic ASC
-   LIMIT ${limitParameter}`,
+   LIMIT $${limitParameter}`,
     values,
   );
 
