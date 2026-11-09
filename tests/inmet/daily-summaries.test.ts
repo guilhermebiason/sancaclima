@@ -101,7 +101,7 @@ test("sinaliza cobertura incompleta sem ocultar a estatística calculada", () =>
 });
 
 
-test("considera suficiente a cobertura exatamente no limite de 75%", () => {
+test("aplica o limite de 75% à média, mas não aos extremos", () => {
   const input = Array.from({ length: 18 }, (_, index) =>
     hourlyPair(index, 15 + index, 60),
   ).flat();
@@ -131,7 +131,7 @@ test("considera suficiente a cobertura exatamente no limite de 75%", () => {
   assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
 });
 
-test("considera suficiente a cobertura de 87,5%", () => {
+test("mantém extremos suspeitos e média válida com 87,5% de cobertura", () => {
   const input = Array.from({ length: 21 }, (_, index) =>
     hourlyPair(index, 15 + index, 60),
   ).flat();
