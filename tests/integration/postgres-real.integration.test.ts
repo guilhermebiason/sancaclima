@@ -4,7 +4,9 @@ import { gzipSync } from "node:zlib";
 import test from "node:test";
 import { Pool } from "pg";
 import {
+  persistDerivedObservations,
   persistInmetImport,
+  readMeteorologicalObservations,
 } from "../../lib/meteorology/persistence/postgres-repository";
 import type {
   MeteorologicalObservation,
@@ -209,6 +211,53 @@ test("PostgreSQL real: preserva arquivo, proveniência, duplicatas, idempotênci
     );
 
     assert.equal(countResult.rows[0].total, 2);
+
+    // Persiste um resumo diário cujo observed_at fica fora da consulta,
+    // mas cujo período cruza o intervalo solicitado.
+    const dailySummary: MeteorologicalObservation = {
+      id: `daily:${stationId}:air_temperature:mean:2026-10-22T03:00:00.000Z`,
+      stationId,
+      sourceId,
+      variable: "air_temperature",
+      value: 21.5,
+      unit: "°C",
+      observedAt: "2026-10-23T02:59:59.999Z",
+      receivedAt,
+      aggregation: "daily",
+      statistic: "mean",
+      periodStart: "2026-10-22T03:00:00.000Z",
+      periodEnd: "2026-10-23T03:00:00.000Z",
+      method: "calculated",
+      coverage: {
+        expectedRecords: 24,
+        availableRecords: 18,
+        completenessRatio: 0.75,
+      },
+      quality: "valid",
+      qualityFlags: [],
+    };
+
+    assert.equal(
+      await persistDerivedObservations(pool, [dailySummary]),
+      1,
+    );
+
+    const overlappingDailyResults = await readMeteorologicalObservations(
+      pool,
+      {
+        stationId,
+        from: "2026-10-22T12:00:00.000Z",
+        to: "2026-10-23T00:00:00.000Z",
+        aggregations: ["daily"],
+      },
+    );
+
+    assert.equal(overlappingDailyResults.length, 1);
+    assert.equal(overlappingDailyResults[0].id, dailySummary.id);
+    assert.equal(overlappingDailyResults[0].value, 21.5);
+    assert.equal(overlappingDailyResults[0].periodStart, dailySummary.periodStart);
+    assert.equal(overlappingDailyResults[0].periodEnd, dailySummary.periodEnd);
+    assert.deepEqual(overlappingDailyResults[0].coverage, dailySummary.coverage);
 
     // Força uma violação real de CHECK do PostgreSQL.
     // A falha ocorre depois da criação de registros dentro da transação.
