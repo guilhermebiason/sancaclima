@@ -50,7 +50,7 @@ O arquivo original é preservado em `BYTEA`. Para arquivos maiores ou retenção
 
 IDs determinísticos das observações permitem reimportação sem duplicar a série normalizada: conflitos atualizam as observações existentes. Isso não significa deduplicação de execuções ou arquivos: cada importação cria um novo `ingestion_run`, preserva uma nova cópia do arquivo e grava novamente suas linhas brutas, identificadas pelo ID da execução. Assim, a série normalizada é idempotente, enquanto o histórico bruto mantém a trilha de auditoria de cada tentativa/importação. Antes de abrir a conexão, o repositório rejeita IDs brutos vazios ou duplicados, números de linha não positivos/não inteiros e números de linha repetidos dentro da mesma importação. Valores suspeitos permanecem armazenados com suas flags. O arquivo original não é alterado.
 
-`readMeteorologicalObservations` consulta uma estação em intervalo semiaberto `[from, to)`, com filtro opcional de variáveis e limite máximo de 20.000 observações.
+`readMeteorologicalObservations` consulta uma estação com filtro opcional de variáveis e limite máximo de 20.000 observações. Observações horárias/instantâneas/acumuladas usam o instante `observed_at` no intervalo semiaberto `[from, to)`. Resumos diários são selecionados pela sobreposição do período: `period_start < to` e `period_end > from`. Portanto, um resumo diário é retornado quando qualquer parte do seu dia de referência cruza o intervalo solicitado, mesmo que `observed_at` (posicionado no fim do dia) esteja fora dele. O resultado continua representando o dia completo, não uma estatística recalculada para o recorte.
 
 ## Testes
 
@@ -78,7 +78,7 @@ Execute-o com a senha local de testes definida no ambiente:
 npx tsx --test tests/integration/postgres-real.integration.test.ts
 ```
 
-**Escopo importante:** esse teste valida o repositório e a transação diretamente contra PostgreSQL real. Ele não executa o script completo de importação A711 nem valida uma conexão com Neon. A execução do importador e sua leitura de volta são uma etapa distinta, descrita abaixo.
+**Escopo importante:** esse teste valida gravação, leitura temporal dos resumos diários, proveniência e transações diretamente contra PostgreSQL real. Usa exclusivamente o banco local dedicado `climabr_test`, com identificadores sintéticos isolados. Ele não executa o script completo de importação A711 nem valida uma conexão com Neon. A execução do importador e sua leitura de volta são uma etapa distinta, descrita abaixo.
 
 Após aplicar a migração em um banco de desenvolvimento apropriado e configurar `DATABASE_URL` para esse banco, importe o fixture A711:
 
