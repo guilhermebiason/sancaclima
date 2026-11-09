@@ -142,3 +142,89 @@ assert.equal(dailySummaries.length, 9 * (2 * 3 + 1));
   assert.equal(october29Mean.quality, "valid");
   assert.ok(Math.abs((october29Mean.value ?? 0) - 19.5666666667) < 1e-6);
 });
+
+
+test("preserva os nove resumos diários de precipitação e suas coberturas", () => {
+  const parsed = parseInmetHourlyCsv(loadRealCsvFixture());
+  const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
+  const result = calculateDailyMeteorologicalSummaries(normalized.observations, {
+    timeZone: "America/Sao_Paulo",
+    receivedAt: RECEIVED_AT,
+  });
+
+  const precipitation = result
+    .filter((observation) =>
+      observation.variable === "precipitation"
+      && observation.aggregation === "daily"
+      && observation.statistic === "sum",
+    )
+    .sort((a, b) => a.periodStart!.localeCompare(b.periodStart!));
+
+  assert.equal(precipitation.length, 9);
+  assert.deepEqual(
+    precipitation.map((observation) => observation.periodStart?.slice(0, 10)),
+    [
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-24",
+      "2026-10-25",
+      "2026-10-26",
+      "2026-10-27",
+      "2026-10-28",
+      "2026-10-29",
+    ],
+  );
+
+  const expected = [
+    { date: "2026-10-21", total: 0, available: 4, quality: "suspect" },
+    { date: "2026-10-22", total: 6.6, available: 24, quality: "valid" },
+    { date: "2026-10-23", total: 16.4, available: 24, quality: "valid" },
+    { date: "2026-10-24", total: 2.8, available: 24, quality: "valid" },
+    { date: "2026-10-25", total: 79.8, available: 24, quality: "valid" },
+    { date: "2026-10-26", total: 0, available: 24, quality: "valid" },
+    { date: "2026-10-27", total: 0, available: 24, quality: "valid" },
+    { date: "2026-10-28", total: 2.6, available: 24, quality: "valid" },
+    { date: "2026-10-29", total: 20, available: 20, quality: "suspect" },
+  ] as const;
+
+  for (const expectedDay of expected) {
+    const summary = precipitation.find((observation) =>
+      observation.periodStart?.startsWith(expectedDay.date),
+    );
+
+    assert.ok(summary, `resumo ausente para ${expectedDay.date}`);
+    assert.equal(summary.unit, "mm");
+    assert.equal(summary.coverage?.expectedRecords, 24);
+    assert.equal(summary.coverage?.availableRecords, expectedDay.available);
+    assert.equal(summary.quality, expectedDay.quality);
+    assert.ok(
+      Math.abs((summary.value ?? Number.NaN) - expectedDay.total) < 1e-9,
+      `total inesperado para ${expectedDay.date}`,
+    );
+
+    if (expectedDay.quality === "suspect") {
+      assert.ok(summary.qualityFlags.includes("insufficient_coverage"));
+    } else {
+      assert.ok(!summary.qualityFlags.includes("insufficient_coverage"));
+    }
+  }
+
+  const totalAcrossDailySummaries = precipitation.reduce(
+    (sum, observation) => sum + (observation.value ?? 0),
+    0,
+  );
+  assert.ok(Math.abs(totalAcrossDailySummaries - 128.2) < 1e-9);
+
+  // O registro de 0,4 mm encerrado à meia-noite local pertence ao dia 28.
+  const october28 = precipitation.find((observation) =>
+    observation.periodStart?.startsWith("2026-10-28"),
+  );
+  const october29 = precipitation.find((observation) =>
+    observation.periodStart?.startsWith("2026-10-29"),
+  );
+  assert.ok(october28);
+  assert.ok(october29);
+  assert.equal(october28.value, 2.6);
+  assert.equal(october29.value, 20);
+});
