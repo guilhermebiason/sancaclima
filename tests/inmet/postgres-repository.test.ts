@@ -47,6 +47,73 @@ function createFakePool() {
   };
 }
 
+test("rejeita IDs e números de linha brutos duplicados antes de abrir conexão", async () => {
+  const { csv, bytes } = loadFixture();
+  const parsed = parseInmetHourlyCsv(csv);
+  const normalized = normalizeInmetCsv(parsed, RECEIVED_AT);
+  const validRawRecords = parsed.records.slice(0, 2).map((record) => ({
+    id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
+    sourceLine: record.sourceLine,
+    observedAt: record.observedAt,
+    rawPayload: record.values as unknown as Record<string, unknown>,
+  }));
+
+  const cases = [
+    {
+      name: "ID duplicado",
+      rawRecords: [
+        validRawRecords[0],
+        { ...validRawRecords[1], id: validRawRecords[0].id },
+      ],
+      message: /Identificador de registro bruto duplicado/,
+    },
+    {
+      name: "linha de origem duplicada",
+      rawRecords: [
+        validRawRecords[0],
+        { ...validRawRecords[1], sourceLine: validRawRecords[0].sourceLine },
+      ],
+      message: /Número de linha de origem duplicado/,
+    },
+    {
+      name: "linha de origem inválida",
+      rawRecords: [
+        { ...validRawRecords[0], sourceLine: 0 },
+        validRawRecords[1],
+      ],
+      message: /Número de linha inválido/,
+    },
+  ];
+
+  for (const scenario of cases) {
+    let connectCalls = 0;
+    const pool = {
+      connect: async () => {
+        connectCalls += 1;
+        throw new Error("A conexão não deveria ser aberta.");
+      },
+    } as unknown as Pool;
+
+    await assert.rejects(
+      persistInmetImport({
+        pool,
+        dataSource: normalized.dataSource,
+        station: normalized.station,
+        observations: normalized.observations,
+        rawRecords: scenario.rawRecords,
+        rawFile: bytes,
+        fileName: "invalid-raw-records.csv.gz",
+        mediaType: "application/gzip",
+        receivedAt: RECEIVED_AT,
+      }),
+      scenario.message,
+      scenario.name,
+    );
+
+    assert.equal(connectCalls, 0, `${scenario.name}: não deve abrir conexão`);
+  }
+});
+
 test("persiste o CSV A711 em uma transação e prepara observações sem perda", async () => {
   const { csv, bytes } = loadFixture();
   const parsed = parseInmetHourlyCsv(csv);
