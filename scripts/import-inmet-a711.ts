@@ -13,25 +13,45 @@ const defaultFixture = resolve(
 );
 const inputPath = process.argv[2] ? resolve(process.argv[2]) : defaultFixture;
 
-function readCsvFile(path: string): { csv: string; bytes: Buffer; fileName: string } {
+function readCsvFile(path: string): {
+  csv: string;
+  rawFile: Buffer;
+  fileName: string;
+  mediaType: string;
+} {
   const input = readFileSync(path);
+
   if (path.endsWith(".csv.gz.base64")) {
-    const bytes = gunzipSync(Buffer.from(input.toString("utf8").trim(), "base64"));
+    // O sufixo .base64 é apenas a representação textual do fixture.
+    // O payload original do INMET é o conteúdo GZIP decodificado.
+    const rawFile = Buffer.from(input.toString("utf8").trim(), "base64");
     return {
-      csv: bytes.toString("utf8"),
-      bytes,
-      fileName: "dados_A711_H_2026-10-22_2026-10-29.csv",
+      csv: gunzipSync(rawFile).toString("utf8"),
+      rawFile,
+      fileName: basename(path, ".base64"),
+      mediaType: "application/gzip",
     };
   }
+
   if (path.endsWith(".csv.gz")) {
-    const bytes = gunzipSync(input);
-    return { csv: bytes.toString("utf8"), bytes, fileName: basename(path, ".gz") };
+    return {
+      csv: gunzipSync(input).toString("utf8"),
+      rawFile: input,
+      fileName: basename(path),
+      mediaType: "application/gzip",
+    };
   }
-  return { csv: input.toString("utf8"), bytes: input, fileName: basename(path) };
+
+  return {
+    csv: input.toString("utf8"),
+    rawFile: input,
+    fileName: basename(path),
+    mediaType: "text/csv",
+  };
 }
 
 async function main(): Promise<void> {
-  const { csv, bytes, fileName } = readCsvFile(inputPath);
+  const { csv, rawFile, fileName, mediaType } = readCsvFile(inputPath);
   const receivedAt = new Date().toISOString();
   const parsed = parseInmetHourlyCsv(csv);
   const normalized = normalizeInmetCsv(parsed, receivedAt);
@@ -40,7 +60,7 @@ async function main(): Promise<void> {
     receivedAt,
   });
   const rawRecords = parsed.records.map((record) => ({
-    id: `${normalized.station.id}:${record.observedAt}`,
+    id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
     sourceLine: record.sourceLine,
     observedAt: record.observedAt,
     rawPayload: record.values as unknown as Record<string, unknown>,
@@ -53,8 +73,9 @@ async function main(): Promise<void> {
     station: normalized.station,
     observations: [...normalized.observations, ...derived],
     rawRecords,
-    rawFile: bytes,
+    rawFile,
     fileName,
+    mediaType,
     receivedAt,
   });
 

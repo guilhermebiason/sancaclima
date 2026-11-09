@@ -21,6 +21,7 @@ export interface PersistInmetImportInput {
   rawRecords: RawInmetRecord[];
   rawFile: Buffer;
   fileName: string;
+  mediaType?: string;
   receivedAt: string;
   startedAt?: string;
 }
@@ -142,6 +143,29 @@ export async function persistDerivedObservations(
   }
 }
 
+function validateRawInmetRecords(records: RawInmetRecord[]): void {
+  const ids = new Set<string>();
+  const sourceLines = new Set<number>();
+
+  for (const record of records) {
+    if (typeof record.id !== "string" || record.id.trim().length === 0) {
+      throw new Error("Cada registro bruto precisa ter um identificador não vazio.");
+    }
+    if (!Number.isInteger(record.sourceLine) || record.sourceLine <= 0) {
+      throw new Error(`Número de linha inválido no registro bruto ${record.id}.`);
+    }
+    if (ids.has(record.id)) {
+      throw new Error(`Identificador de registro bruto duplicado: ${record.id}.`);
+    }
+    if (sourceLines.has(record.sourceLine)) {
+      throw new Error(`Número de linha de origem duplicado: ${record.sourceLine}.`);
+    }
+
+    ids.add(record.id);
+    sourceLines.add(record.sourceLine);
+  }
+}
+
 /**
  * Persiste o arquivo original, linhas brutas e observações em uma única transação.
  * Reimportações atualizam observações com IDs determinísticos em vez de duplicá-las.
@@ -158,6 +182,7 @@ export async function persistInmetImport(
   if (input.rawRecords.length === 0) {
     throw new Error("A importação precisa conter ao menos um registro bruto.");
   }
+  validateRawInmetRecords(input.rawRecords);
 
   const client = await input.pool.connect();
   const ingestionRunId = randomUUID();
@@ -165,8 +190,8 @@ export async function persistInmetImport(
   const rawFileSha256 = createHash("sha256").update(input.rawFile).digest("hex");
   const rawFileId = randomUUID();
   // Cada execução mantém sua própria cópia rastreável das linhas brutas.
-  const rawRecordByTimestamp = new Map(
-    input.rawRecords.map((record) => [record.observedAt, `${ingestionRunId}:${record.id}`]),
+  const rawRecordById = new Map(
+    input.rawRecords.map((record) => [record.id, `${ingestionRunId}:${record.id}`]),
   );
 
   try {
@@ -231,11 +256,12 @@ export async function persistInmetImport(
     await client.query(
       `INSERT INTO raw_files
        (id, ingestion_run_id, file_name, media_type, sha256, size_bytes, content, received_at)
-       VALUES ($1, $2, $3, 'text/csv', $4, $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         rawFileId,
         ingestionRunId,
         input.fileName,
+        input.mediaType ?? "text/csv",
         rawFileSha256,
         input.rawFile.length,
         input.rawFile,
@@ -244,7 +270,7 @@ export async function persistInmetImport(
     );
 
     const rawRows = input.rawRecords.map((record) => [
-      rawRecordByTimestamp.get(record.observedAt),
+      `${ingestionRunId}:${record.id}`,
       ingestionRunId,
       rawFileId,
       record.sourceLine,
@@ -284,18 +310,47 @@ export async function persistInmetImport(
       observation.coverage?.completenessRatio ?? null,
       observation.quality,
       observation.qualityFlags,
-      observation.rawRecordId ?? rawRecordByTimestamp.get(observation.observedAt) ?? null,
+      (() => {
+        const sourceRawRecordId = observation.rawRecordId
+          ?? (observation.method === "measured" && observation.sourceRecordId
+            ? observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":"))
+            : null);
+        return sourceRawRecordId
+          ? rawRecordById.get(sourceRawRecordId) ?? sourceRawRecordId
+          : null;
+      })(),
       observation.sourceRecordId ?? null,
     ]);
     for (let offset = 0; offset < observationRows.length; offset += 300) {
       await insertObservationBatch(client, observationRows.slice(offset, offset + 300));
     }
 
-    const rejectedRecords = input.rawRecords.filter((record) =>
-      input.observations.some((observation) =>
-        observation.observedAt === record.observedAt && observation.quality === "invalid",
-      ),
-    ).length;
+    // Rejeição é contabilizada por linha de origem, nunca apenas pelo horário:
+    // linhas distintas podem compartilhar o mesmo observedAt.
+    const rejectedRawRecordIds = new Set<string>();
+    const currentRawRecordIds = new Set(rawRecordById.values());
+
+    for (const observation of input.observations) {
+      if (observation.method !== "measured" || observation.quality !== "invalid") {
+        continue;
+      }
+
+      const sourceRawRecordId = observation.rawRecordId
+        ?? (observation.sourceRecordId
+          ? rawRecordById.get(
+              observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":")),
+            )
+          : null);
+
+      if (!sourceRawRecordId) continue;
+
+      const persistedRawRecordId = rawRecordById.get(sourceRawRecordId) ?? sourceRawRecordId;
+      if (currentRawRecordIds.has(persistedRawRecordId)) {
+        rejectedRawRecordIds.add(persistedRawRecordId);
+      }
+    }
+
+    const rejectedRecords = rejectedRawRecordIds.size;
     const acceptedRecords = input.rawRecords.length - rejectedRecords;
     const status = rejectedRecords > 0 ? "partially_succeeded" : "succeeded";
 
