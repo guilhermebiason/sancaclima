@@ -90,6 +90,34 @@ test("converte sentinela de ausência em null, sem transformar em zero", () => {
   assert.ok(precipitation?.qualityFlags.includes("missing_value"));
 });
 
+test("rejeita linha CSV truncada em vez de criar observações ausentes silenciosamente", () => {
+  assert.throws(
+    () => parseInmetHourlyCsv(csv([
+      "2026-10-22;0000;0;100;21,7;57;129",
+    ])),
+    /Linha CSV truncada na linha 12: esperadas 8 colunas, recebidas 7\./,
+  );
+});
+
+test("preserva célula vazia quando a estrutura da linha está completa", () => {
+  const parsed = parseInmetHourlyCsv(csv([
+    "2026-10-22;0000;0;100;21,7;;129;2,4;",
+  ]));
+
+  assert.equal(parsed.records.length, 1);
+  assert.equal(parsed.records[0].values.relativeHumidity, null);
+  assert.equal(parsed.records[0].values.windSpeed, 2.4);
+});
+
+test("rejeita conteúdo não vazio além das colunas declaradas", () => {
+  assert.throws(
+    () => parseInmetHourlyCsv(csv([
+      "2026-10-22;0000;0;100;21,7;57;129;2,4;unexpected",
+    ])),
+    /Quantidade de colunas excedente na linha 12/,
+  );
+});
+
 test("identifica timestamps duplicados sem remover registros", () => {
   const parsed = parseInmetHourlyCsv(csv([
     "2026-10-22;0000;0;100;21,7;57;129;2,4;",

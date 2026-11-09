@@ -143,10 +143,28 @@ export function parseInmetHourlyCsv(csvText: string): ParsedInmetCsv {
     if (!line) continue;
 
     const cells = line.split(";").map((cell) => cell.trim());
-    if (cells.length <= Math.max(dateIndex, timeIndex)) continue;
-    if (!cells[dateIndex] && !cells[timeIndex]) continue;
-
     const sourceLine = index + 1;
+
+    // O INMET pode exportar um delimitador vazio adicional ao final da linha.
+    // Aceitamos somente esses campos excedentes vazios; qualquer coluna ausente
+    // ou conteúdo extra indica uma linha estruturalmente inconsistente.
+    if (cells.length > headers.length) {
+      const extraCells = cells.slice(headers.length);
+      if (extraCells.some((cell) => cell !== "")) {
+        throw new Error(
+          `Quantidade de colunas excedente na linha ${sourceLine}: esperadas ${headers.length}, recebidas ${cells.length}.`,
+        );
+      }
+      cells.length = headers.length;
+    }
+
+    if (cells.length < headers.length) {
+      throw new Error(
+        `Linha CSV truncada na linha ${sourceLine}: esperadas ${headers.length} colunas, recebidas ${cells.length}.`,
+      );
+    }
+
+    if (!cells[dateIndex] && !cells[timeIndex]) continue;
     const observedAt = parseUtcTimestamp(cells[dateIndex], cells[timeIndex], sourceLine);
     records.push({
       observedAt,
