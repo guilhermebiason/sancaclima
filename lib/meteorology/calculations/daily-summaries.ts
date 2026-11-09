@@ -129,6 +129,14 @@ export function calculateDewPointCelsius(
   return Number.isFinite(dewPoint) ? dewPoint : null;
 }
 
+function minimumCoverageForStatistic(
+  statistic: ObservationStatistic,
+  configuredMinimumCoverage?: number,
+): number {
+  if (configuredMinimumCoverage !== undefined) return configuredMinimumCoverage;
+  return statistic === "mean" ? DEFAULT_MINIMUM_COVERAGE : 1;
+}
+
 function dailyObservation(
   template: MeteorologicalObservation,
   statistic: ObservationStatistic,
@@ -171,7 +179,7 @@ function summarizeDay(
   periodEnd: Date,
   receivedAt: string,
   expectedRecords: number,
-  minimumCoverage: number,
+  configuredMinimumCoverage?: number,
 ): MeteorologicalObservation[] {
   const usable = observations.filter(isUsable);
   if (usable.length === 0) return [];
@@ -184,9 +192,9 @@ function summarizeDay(
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
 
   return [
-    dailyObservation(template, "minimum", min, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverage),
-    dailyObservation(template, "maximum", max, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverage),
-    dailyObservation(template, "mean", mean, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverage),
+    dailyObservation(template, "minimum", min, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverageForStatistic("minimum", configuredMinimumCoverage)),
+    dailyObservation(template, "maximum", max, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverageForStatistic("maximum", configuredMinimumCoverage)),
+    dailyObservation(template, "mean", mean, periodStart, periodEnd, receivedAt, expectedRecords, availableRecords, minimumCoverageForStatistic("mean", configuredMinimumCoverage)),
   ];
 }
 
@@ -196,7 +204,7 @@ function summarizePrecipitationDay(
   periodEnd: Date,
   receivedAt: string,
   expectedRecords: number,
-  minimumCoverage: number,
+  configuredMinimumCoverage?: number,
 ): MeteorologicalObservation[] {
   const usable = observations.filter(isUsable);
 
@@ -222,7 +230,7 @@ function summarizePrecipitationDay(
       receivedAt,
       expectedRecords,
       availableRecords,
-      minimumCoverage,
+      minimumCoverageForStatistic("sum", configuredMinimumCoverage),
     ),
   ];
 }
@@ -242,12 +250,15 @@ export function calculateDailyMeteorologicalSummaries(
 ): MeteorologicalObservation[] {
   const timeZone = options.timeZone ?? DEFAULT_TIME_ZONE;
   const receivedAt = options.receivedAt ?? new Date().toISOString();
-  const minimumCoverage = options.minimumCoverage ?? DEFAULT_MINIMUM_COVERAGE;
+  const minimumCoverage = options.minimumCoverage;
 
   if (Number.isNaN(Date.parse(receivedAt))) {
     throw new Error("receivedAt deve ser um timestamp ISO 8601 válido.");
   }
-  if (!Number.isFinite(minimumCoverage) || minimumCoverage < 0 || minimumCoverage > 1) {
+  if (
+    minimumCoverage !== undefined
+    && (!Number.isFinite(minimumCoverage) || minimumCoverage < 0 || minimumCoverage > 1)
+  ) {
     throw new Error("minimumCoverage deve estar entre 0 e 1.");
   }
 
