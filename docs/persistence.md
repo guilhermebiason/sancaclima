@@ -62,15 +62,25 @@ O teste `tests/inmet/postgres-repository.test.ts` usa o fixture real A711 e um c
 - rejeição de IDs e números de linha duplicados ou inválidos antes de abrir a conexão;
 - rollback e liberação da conexão em caso de falha.
 
-Execute:
+Execute as suítes de regressão:
 
 ```powershell
 npm run test:inmet
+npm run test:meteorology
+npm run test:api
 ```
 
-Esse teste valida a lógica de persistência e o contrato SQL com um cliente simulado. **Não substitui o teste com um PostgreSQL real.** A validação real ainda exige configurar um banco de desenvolvimento, aplicar a migração e executar o importador contra esse banco, conferindo as contagens e uma leitura de volta.
+O teste `tests/integration/postgres-real.integration.test.ts` é uma verificação separada, executada contra um PostgreSQL real local no banco dedicado `climabr_test`. Ele não usa `DATABASE_URL` nem carrega `.env.local`; recebe a senha local pela variável temporária `CLIMABR_TEST_DB_PASSWORD`. Verifica os bytes GZIP, metadados e tamanho do arquivo, linhas brutas distintas com o mesmo timestamp, vínculos de proveniência, idempotência das observações e rollback após uma violação real de integridade. O teste remove somente os registros identificados pelos próprios IDs gerados para aquela execução.
 
-Após aplicar a migração e configurar `DATABASE_URL`, importe o fixture A711:
+Execute-o com a senha local de testes definida no ambiente:
+
+```powershell
+npx tsx --test tests/integration/postgres-real.integration.test.ts
+```
+
+**Escopo importante:** esse teste valida o repositório e a transação diretamente contra PostgreSQL real. Ele não executa o script completo de importação A711 nem valida uma conexão com Neon. A execução do importador e sua leitura de volta são uma etapa distinta, descrita abaixo.
+
+Após aplicar a migração em um banco de desenvolvimento apropriado e configurar `DATABASE_URL` para esse banco, importe o fixture A711:
 
 ```powershell
 npm run db:import:inmet-a711
@@ -82,7 +92,7 @@ Para importar outro CSV, informe o caminho como argumento:
 npm run db:import:inmet-a711 -- "C:\\dados\\estacao.csv"
 ```
 
-O comando executa parser, normalização, controle de qualidade, cálculos de ponto de orvalho/resumos, persistência em uma transação e leitura de volta. Ele confere a quantidade recuperada e a preservação das 80 radiações negativas sinalizadas. Ele não é uma rotina automática nem deve ser exposto como endpoint público.
+O comando executa parser, normalização, controle de qualidade, cálculos de ponto de orvalho/resumos, persistência em uma transação e leitura de volta. Ele confere a quantidade recuperada e a preservação das 80 radiações negativas sinalizadas. Ele não é uma rotina automática nem deve ser exposto como endpoint público. Não execute esse importador contra produção/Neon sem uma decisão explícita e um plano de validação próprios.
 
 ## Decisões de modelagem
 
