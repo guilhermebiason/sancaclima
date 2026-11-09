@@ -299,11 +299,32 @@ export async function persistInmetImport(
       await insertObservationBatch(client, observationRows.slice(offset, offset + 300));
     }
 
-    const rejectedRecords = input.rawRecords.filter((record) =>
-      input.observations.some((observation) =>
-        observation.observedAt === record.observedAt && observation.quality === "invalid",
-      ),
-    ).length;
+    // Rejeição é contabilizada por linha de origem, nunca apenas pelo horário:
+    // linhas distintas podem compartilhar o mesmo observedAt.
+    const rejectedRawRecordIds = new Set<string>();
+    const currentRawRecordIds = new Set(rawRecordById.values());
+
+    for (const observation of input.observations) {
+      if (observation.method !== "measured" || observation.quality !== "invalid") {
+        continue;
+      }
+
+      const sourceRawRecordId = observation.rawRecordId
+        ?? (observation.sourceRecordId
+          ? rawRecordById.get(
+              observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":")),
+            )
+          : null);
+
+      if (!sourceRawRecordId) continue;
+
+      const persistedRawRecordId = rawRecordById.get(sourceRawRecordId) ?? sourceRawRecordId;
+      if (currentRawRecordIds.has(persistedRawRecordId)) {
+        rejectedRawRecordIds.add(persistedRawRecordId);
+      }
+    }
+
+    const rejectedRecords = rejectedRawRecordIds.size;
     const acceptedRecords = input.rawRecords.length - rejectedRecords;
     const status = rejectedRecords > 0 ? "partially_succeeded" : "succeeded";
 
