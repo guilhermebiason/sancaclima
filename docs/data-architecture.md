@@ -64,7 +64,7 @@ O contrato de observação oferece os seguintes campos opcionais, preservando co
 
 Para uma estatística diária, `aggregation` será `daily`, enquanto `statistic` informa qual resumo foi calculado. Uma observação horária da fonte continua sendo representada sem estatística adicional e pode indicar `method: "measured"`.
 
-A cobertura precisa acompanhar agregações temporais. Uma série incompleta não deve ser apresentada como se garantisse o extremo diário. As regras para aceitar, sinalizar ou rejeitar estatísticas com cobertura parcial serão implementadas no módulo de cálculo, não presumidas pelo tipo.
+A cobertura acompanha cada agregação temporal e é avaliada conforme a estatística calculada. Os extremos diários (mínima e máxima) de temperatura do ar e ponto de orvalho exigem 100% dos registros horários esperados; médias diárias exigem ao menos 75%; a precipitação acumulada diária também exige 100%. Quando há dados utilizáveis, o resultado parcial é preservado, mas recebe qualidade `suspect` e a flag `insufficient_coverage` se não atingir o limiar aplicável. A cobertura é calculada com timestamps distintos, e observações duplicadas ou suspeitas não entram no cálculo. A opção `minimumCoverage`, quando explicitamente informada pelo chamador, substitui os limiares padrão para todas as estatísticas, permitindo cenários controlados de análise.
 
 As flags `insufficient_coverage` e `derived_from_suspect_data` permitem registrar limitações de qualidade sem apagar o resultado ou a sua proveniência.
 
@@ -74,7 +74,7 @@ O modelo legado em `types/station.ts` permanece em uso pelo dashboard. A integra
 
 O modelo inclui `dew_point_temperature` como variável derivada. O ponto de orvalho horário é calculado com temperatura e umidade relativa pareadas pelo mesmo timestamp, usando a aproximação de Magnus. O método, as unidades e as restrições de entrada estão documentados em `docs/inmet-integration.md`.
 
-O módulo `lib/meteorology/calculations/daily-summaries.ts` produz o ponto de orvalho horário e resumos diários (mínima, máxima e média) para temperatura do ar e ponto de orvalho. O agrupamento diário respeita o fuso local configurado; os períodos são armazenados em UTC. Cada resumo informa cobertura e recebe a flag `insufficient_coverage` quando fica abaixo do limiar configurado.
+O módulo `lib/meteorology/calculations/daily-summaries.ts` produz o ponto de orvalho horário e resumos diários (mínima, máxima e média) para temperatura do ar e ponto de orvalho, além da precipitação acumulada diária. O agrupamento diário respeita o fuso local configurado; os períodos são armazenados em UTC. Cada resumo informa cobertura e é classificado segundo o limiar específico da estatística: 100% para mínima, máxima e soma diária; 75% para média. A opção `minimumCoverage` permite substituir explicitamente esses valores durante análises controladas.
 
 ## Primeiro recorte: INMET — estação automática A711 (São Carlos)
 

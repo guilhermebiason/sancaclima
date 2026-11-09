@@ -101,7 +101,7 @@ test("sinaliza cobertura incompleta sem ocultar a estatística calculada", () =>
 });
 
 
-test("considera suficiente a cobertura exatamente no limite de 75%", () => {
+test("aplica o limite de 75% à média, mas não aos extremos", () => {
   const input = Array.from({ length: 18 }, (_, index) =>
     hourlyPair(index, 15 + index, 60),
   ).flat();
@@ -119,13 +119,44 @@ test("considera suficiente a cobertura exatamente no limite de 75%", () => {
   assert.ok(dailyTemperature.every(
     (item) => item.coverage?.completenessRatio === 0.75,
   ));
+  const minimum = dailyTemperature.find((item) => item.statistic === "minimum");
+  const maximum = dailyTemperature.find((item) => item.statistic === "maximum");
+  const mean = dailyTemperature.find((item) => item.statistic === "mean");
+
+  assert.equal(minimum?.quality, "suspect");
+  assert.equal(maximum?.quality, "suspect");
+  assert.equal(mean?.quality, "valid");
+  assert.ok(minimum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(maximum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
+});
+
+test("minimumCoverage substitui os limiares padrão de todas as estatísticas", () => {
+  const input = Array.from({ length: 18 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+    minimumCoverage: 0.75,
+  });
+
+  const dailyTemperature = result.filter((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily",
+  );
+
+  assert.equal(dailyTemperature.length, 3);
+  assert.ok(dailyTemperature.every(
+    (item) => item.coverage?.completenessRatio === 0.75,
+  ));
   assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
   assert.ok(dailyTemperature.every(
     (item) => !item.qualityFlags.includes("insufficient_coverage"),
   ));
 });
 
-test("considera suficiente a cobertura de 87,5%", () => {
+test("mantém extremos suspeitos e média válida com 87,5% de cobertura", () => {
   const input = Array.from({ length: 21 }, (_, index) =>
     hourlyPair(index, 15 + index, 60),
   ).flat();
@@ -143,12 +174,40 @@ test("considera suficiente a cobertura de 87,5%", () => {
   assert.ok(dailyTemperature.every(
     (item) => item.coverage?.completenessRatio === 0.875,
   ));
-  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
-  assert.ok(dailyTemperature.every(
-    (item) => !item.qualityFlags.includes("insufficient_coverage"),
-  ));
+  const minimum = dailyTemperature.find((item) => item.statistic === "minimum");
+  const maximum = dailyTemperature.find((item) => item.statistic === "maximum");
+  const mean = dailyTemperature.find((item) => item.statistic === "mean");
+
+  assert.equal(minimum?.quality, "suspect");
+  assert.equal(maximum?.quality, "suspect");
+  assert.equal(mean?.quality, "valid");
+  assert.ok(minimum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(maximum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
 });
 
+
+test("exige cobertura completa para extremos diários de temperatura e ponto de orvalho", () => {
+  const input = Array.from({ length: 23 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+
+  for (const variable of ["air_temperature", "dew_point_temperature"] as const) {
+    const summaries = result.filter((item) =>
+      item.variable === variable && item.aggregation === "daily",
+    );
+    assert.equal(summaries.length, 3);
+    assert.ok(summaries
+      .filter((item) => item.statistic === "minimum" || item.statistic === "maximum")
+      .every((item) => item.quality === "suspect"));
+    assert.equal(summaries.find((item) => item.statistic === "mean")?.quality, "valid");
+    assert.ok(summaries.every((item) => item.coverage?.availableRecords === 23));
+  }
+});
 
 test("não usa observações suspeitas para derivar ponto de orvalho", () => {
   const input = hourlyPair(0, 20, 60).map((item) =>
@@ -201,6 +260,66 @@ test("atribui a precipitação encerrada à meia-noite ao dia local anterior", (
   assert.equal(precipitation.quality, "suspect");
   assert.equal(precipitation.coverage?.expectedRecords, 24);
   assert.equal(precipitation.coverage?.availableRecords, 1);
+});
+
+test("exige cobertura completa para validar a precipitação diária", () => {
+  const input: MeteorologicalObservation[] = Array.from({ length: 23 }, (_, index) => ({
+    id: `precipitation-${index}`,
+    stationId: "INMET:A711",
+    sourceId: "inmet-bdmep",
+    variable: "precipitation" as const,
+    value: 0.5,
+    unit: "mm",
+    observedAt: new Date(Date.parse("2026-10-22T04:00:00.000Z") + index * 3_600_000).toISOString(),
+    receivedAt: RECEIVED_AT,
+    aggregation: "accumulated" as const,
+    method: "measured" as const,
+    quality: "valid" as const,
+    qualityFlags: [],
+  }));
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    timeZone: "America/Sao_Paulo",
+    receivedAt: RECEIVED_AT,
+  });
+  const precipitation = result.find((item) =>
+    item.variable === "precipitation"
+    && item.aggregation === "daily"
+    && item.statistic === "sum",
+  );
+
+  assert.ok(precipitation);
+  assert.equal(precipitation.value, 11.5);
+  assert.equal(precipitation.coverage?.expectedRecords, 24);
+  assert.equal(precipitation.coverage?.availableRecords, 23);
+  assert.equal(precipitation.quality, "suspect");
+  assert.ok(precipitation.qualityFlags.includes("insufficient_coverage"));
+});
+
+test("não conta observação duplicada na cobertura nem nos extremos", () => {
+  const input = Array.from({ length: 24 }, (_, index) =>
+    hourlyPair(index, 10 + index, 50),
+  ).flat();
+  input.push({
+    ...input[0],
+    id: "temperature-duplicate",
+    value: -50,
+    qualityFlags: ["duplicate"],
+  });
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+  const minimum = result.find((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily"
+    && item.statistic === "minimum",
+  );
+
+  assert.ok(minimum);
+  assert.equal(minimum.value, 10);
+  assert.equal(minimum.coverage?.availableRecords, 24);
+  assert.equal(minimum.quality, "valid");
 });
 
 test("exclui precipitação suspeita da soma e da cobertura diária", () => {
