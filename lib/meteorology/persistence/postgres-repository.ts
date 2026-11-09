@@ -143,6 +143,29 @@ export async function persistDerivedObservations(
   }
 }
 
+function validateRawInmetRecords(records: RawInmetRecord[]): void {
+  const ids = new Set<string>();
+  const sourceLines = new Set<number>();
+
+  for (const record of records) {
+    if (typeof record.id !== "string" || record.id.trim().length === 0) {
+      throw new Error("Cada registro bruto precisa ter um identificador não vazio.");
+    }
+    if (!Number.isInteger(record.sourceLine) || record.sourceLine <= 0) {
+      throw new Error(`Número de linha inválido no registro bruto ${record.id}.`);
+    }
+    if (ids.has(record.id)) {
+      throw new Error(`Identificador de registro bruto duplicado: ${record.id}.`);
+    }
+    if (sourceLines.has(record.sourceLine)) {
+      throw new Error(`Número de linha de origem duplicado: ${record.sourceLine}.`);
+    }
+
+    ids.add(record.id);
+    sourceLines.add(record.sourceLine);
+  }
+}
+
 /**
  * Persiste o arquivo original, linhas brutas e observações em uma única transação.
  * Reimportações atualizam observações com IDs determinísticos em vez de duplicá-las.
@@ -159,6 +182,7 @@ export async function persistInmetImport(
   if (input.rawRecords.length === 0) {
     throw new Error("A importação precisa conter ao menos um registro bruto.");
   }
+  validateRawInmetRecords(input.rawRecords);
 
   const client = await input.pool.connect();
   const ingestionRunId = randomUUID();
@@ -286,13 +310,15 @@ export async function persistInmetImport(
       observation.coverage?.completenessRatio ?? null,
       observation.quality,
       observation.qualityFlags,
-      observation.rawRecordId ?? (
-        observation.method === "measured" && observation.sourceRecordId
-          ? rawRecordById.get(
-              observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":")),
-            ) ?? null
-          : null
-      ),
+      (() => {
+        const sourceRawRecordId = observation.rawRecordId
+          ?? (observation.method === "measured" && observation.sourceRecordId
+            ? observation.sourceRecordId.slice(0, observation.sourceRecordId.lastIndexOf(":"))
+            : null);
+        return sourceRawRecordId
+          ? rawRecordById.get(sourceRawRecordId) ?? sourceRawRecordId
+          : null;
+      })(),
       observation.sourceRecordId ?? null,
     ]);
     for (let offset = 0; offset < observationRows.length; offset += 300) {
