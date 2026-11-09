@@ -48,7 +48,7 @@ O arquivo original é preservado em `BYTEA`. Para arquivos maiores ou retenção
 6. Atualização das contagens e conclusão da execução.
 7. Commit; em erro, rollback e liberação da conexão.
 
-IDs determinísticos das observações permitem reimportação sem duplicar a série. As linhas brutas são identificadas por execução para manter a trilha de auditoria de cada importação. Valores suspeitos permanecem armazenados com suas flags. O arquivo original não é alterado.
+IDs determinísticos das observações permitem reimportação sem duplicar a série normalizada: conflitos atualizam as observações existentes. Isso não significa deduplicação de execuções ou arquivos: cada importação cria um novo `ingestion_run`, preserva uma nova cópia do arquivo e grava novamente suas linhas brutas, identificadas pelo ID da execução. Assim, a série normalizada é idempotente, enquanto o histórico bruto mantém a trilha de auditoria de cada tentativa/importação. Antes de abrir a conexão, o repositório rejeita IDs brutos vazios ou duplicados, números de linha não positivos/não inteiros e números de linha repetidos dentro da mesma importação. Valores suspeitos permanecem armazenados com suas flags. O arquivo original não é alterado.
 
 `readMeteorologicalObservations` consulta uma estação em intervalo semiaberto `[from, to)`, com filtro opcional de variáveis e limite máximo de 20.000 observações.
 
@@ -59,6 +59,7 @@ O teste `tests/inmet/postgres-repository.test.ts` usa o fixture real A711 e um c
 - contagem e parâmetros de 1.398 observações (horárias originais, ponto de orvalho e estatísticas diárias);
 - preservação de valores suspeitos e flags;
 - vínculo das observações horárias com registros brutos;
+- rejeição de IDs e números de linha duplicados ou inválidos antes de abrir a conexão;
 - rollback e liberação da conexão em caso de falha.
 
 Execute:
