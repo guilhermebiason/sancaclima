@@ -428,11 +428,21 @@ const result = await pool.query(
           raw_record_id, source_record_id
    FROM meteorological_observations
    WHERE station_id = $1
-     AND observed_at >= $2
-     AND observed_at < $3
+     AND (
+       (
+         aggregation = 'daily'
+         AND period_start < $3
+         AND period_end > $2
+       )
+       OR (
+         aggregation <> 'daily'
+         AND observed_at >= $2
+         AND observed_at < $3
+       )
+     )
      ${filters}
    ORDER BY observed_at ASC, variable ASC, statistic ASC
-   LIMIT $${values.length}`,
+   LIMIT ${values.length}`,
     values,
   );
 
