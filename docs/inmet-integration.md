@@ -79,7 +79,7 @@ O resultado horário usa `variable: "dew_point_temperature"`, `method: "derived"
 
 O mesmo módulo calcula mínima, máxima e média diárias para temperatura do ar e ponto de orvalho. O dia é definido pelo fuso `America/Sao_Paulo`; os limites do período são armazenados em UTC. O fim do período é exclusivo. A cobertura esperada é calculada pela duração real do dia no fuso, permitindo dias de 23 ou 25 horas caso regras de horário de verão sejam aplicáveis.
 
-Por padrão, uma cobertura inferior a 75% é sinalizada com `insufficient_coverage` e o resumo permanece disponível com qualidade `suspect`. A política é configurável por `minimumCoverage`. Somente observações com qualidade `valid` participam dos cálculos; valores ausentes, duplicados ou suspeitos não são usados silenciosamente. A cobertura representa registros válidos disponíveis em relação aos horários esperados.
+Por padrão, mínima e máxima diárias de temperatura do ar e ponto de orvalho, assim como a soma diária de precipitação, exigem 100% de cobertura. Médias diárias exigem ao menos 75%. Se a cobertura ficar abaixo do limiar aplicável, o resumo calculável é preservado com qualidade `suspect` e a flag `insufficient_coverage`. A opção `minimumCoverage`, quando explicitamente informada, substitui os limiares padrão para todas as estatísticas e deve ser usada apenas em análises controladas. Somente observações com qualidade `valid` participam dos cálculos; valores ausentes, duplicados ou suspeitos não são usados silenciosamente. A cobertura representa timestamps distintos válidos em relação aos horários esperados.
 
 As mínimas e máximas obtidas da série horária continuam sendo extremos amostrais da série, não extremos oficiais intrahorários do INMET.
 
