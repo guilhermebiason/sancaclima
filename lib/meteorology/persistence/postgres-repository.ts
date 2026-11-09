@@ -387,7 +387,7 @@ export interface ReadObservationsInput {
   limit?: number;
 }
 
-/** Leitura paginada temporal para serviços de API executados exclusivamente no servidor. */
+/** Consulta temporal limitada para serviços de API executados exclusivamente no servidor. */
 export async function readMeteorologicalObservations(
   pool: Pool,
   input: ReadObservationsInput,
