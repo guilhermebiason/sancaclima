@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - feature/inmet-data-engine
+  push:
+    branches:
+      - feature/inmet-data-engine
+      - fix/inmet-raw-provenance
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests, lint and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run INMET tests
+        run: npm run test:inmet
+
+      - name: Run meteorology tests
+        run: npm run test:meteorology
+
+      - name: Run API tests
+        run: npm run test:api
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build production application
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
