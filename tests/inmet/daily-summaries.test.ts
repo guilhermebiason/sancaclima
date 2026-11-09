@@ -131,6 +131,31 @@ test("aplica o limite de 75% à média, mas não aos extremos", () => {
   assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
 });
 
+test("minimumCoverage substitui os limiares padrão de todas as estatísticas", () => {
+  const input = Array.from({ length: 18 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+    minimumCoverage: 0.75,
+  });
+
+  const dailyTemperature = result.filter((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily",
+  );
+
+  assert.equal(dailyTemperature.length, 3);
+  assert.ok(dailyTemperature.every(
+    (item) => item.coverage?.completenessRatio === 0.75,
+  ));
+  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
+  assert.ok(dailyTemperature.every(
+    (item) => !item.qualityFlags.includes("insufficient_coverage"),
+  ));
+});
+
 test("mantém extremos suspeitos e média válida com 87,5% de cobertura", () => {
   const input = Array.from({ length: 21 }, (_, index) =>
     hourlyPair(index, 15 + index, 60),
