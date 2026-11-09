@@ -133,6 +133,15 @@ test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", asy
   const duplicateRows = parsed.records.filter((record) => record.observedAt === firstTimestamp);
   assert.equal(duplicateRows.length, 2);
 
+  // Uma variável inválida em uma das linhas não pode rejeitar a outra
+  // linha que compartilha o mesmo timestamp.
+  const invalidSourceRecordId = `${parsed.station.code}:${firstTimestamp}:line-${duplicateRows[0].sourceLine}:solar_radiation`;
+  const observationsWithOneInvalidValue = normalized.observations.map((observation) =>
+    observation.sourceRecordId === invalidSourceRecordId
+      ? { ...observation, quality: "invalid" as const }
+      : observation,
+  );
+
   const rawRecords = parsed.records.map((record) => ({
     id: `${parsed.station.code}:${record.observedAt}:line-${record.sourceLine}`,
     sourceLine: record.sourceLine,
@@ -146,7 +155,7 @@ test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", asy
     pool: fake.pool,
     dataSource: normalized.dataSource,
     station: normalized.station,
-    observations: normalized.observations,
+    observations: observationsWithOneInvalidValue,
     rawRecords,
     rawFile: duplicatedRawFile,
     fileName: "duplicated-source.csv.gz",
@@ -170,6 +179,14 @@ test("mantém linhas brutas distintas quando o CSV repete o mesmo horário", asy
     }
   }
   assert.equal(linkedIds.size, 2);
+
+  const ingestionUpdate = fake.calls.find((call) =>
+    call.sql.includes("UPDATE ingestion_runs"),
+  );
+  assert.ok(ingestionUpdate);
+  assert.equal(ingestionUpdate.values?.[2], "partially_succeeded");
+  assert.equal(ingestionUpdate.values?.[3], parsed.records.length - 1);
+  assert.equal(ingestionUpdate.values?.[4], 1);
 });
 
 test("faz rollback e libera a conexão quando uma gravação falha", async () => {
