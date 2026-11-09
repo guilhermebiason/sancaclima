@@ -419,7 +419,7 @@ if (input.qualities?.length) {
 
 values.push(limit);
 
-const limitParameter = `${values.length}`;
+const limitParameter = String(values.length);
 
 const result = await pool.query(
   `SELECT id, station_id, source_id, variable, value, unit,
