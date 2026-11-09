@@ -119,10 +119,16 @@ test("considera suficiente a cobertura exatamente no limite de 75%", () => {
   assert.ok(dailyTemperature.every(
     (item) => item.coverage?.completenessRatio === 0.75,
   ));
-  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
-  assert.ok(dailyTemperature.every(
-    (item) => !item.qualityFlags.includes("insufficient_coverage"),
-  ));
+  const minimum = dailyTemperature.find((item) => item.statistic === "minimum");
+  const maximum = dailyTemperature.find((item) => item.statistic === "maximum");
+  const mean = dailyTemperature.find((item) => item.statistic === "mean");
+
+  assert.equal(minimum?.quality, "suspect");
+  assert.equal(maximum?.quality, "suspect");
+  assert.equal(mean?.quality, "valid");
+  assert.ok(minimum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(maximum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
 });
 
 test("considera suficiente a cobertura de 87,5%", () => {
@@ -143,12 +149,40 @@ test("considera suficiente a cobertura de 87,5%", () => {
   assert.ok(dailyTemperature.every(
     (item) => item.coverage?.completenessRatio === 0.875,
   ));
-  assert.ok(dailyTemperature.every((item) => item.quality === "valid"));
-  assert.ok(dailyTemperature.every(
-    (item) => !item.qualityFlags.includes("insufficient_coverage"),
-  ));
+  const minimum = dailyTemperature.find((item) => item.statistic === "minimum");
+  const maximum = dailyTemperature.find((item) => item.statistic === "maximum");
+  const mean = dailyTemperature.find((item) => item.statistic === "mean");
+
+  assert.equal(minimum?.quality, "suspect");
+  assert.equal(maximum?.quality, "suspect");
+  assert.equal(mean?.quality, "valid");
+  assert.ok(minimum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(maximum?.qualityFlags.includes("insufficient_coverage"));
+  assert.ok(!mean?.qualityFlags.includes("insufficient_coverage"));
 });
 
+
+test("exige cobertura completa para extremos diários de temperatura e ponto de orvalho", () => {
+  const input = Array.from({ length: 23 }, (_, index) =>
+    hourlyPair(index, 15 + index, 60),
+  ).flat();
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+
+  for (const variable of ["air_temperature", "dew_point_temperature"] as const) {
+    const summaries = result.filter((item) =>
+      item.variable === variable && item.aggregation === "daily",
+    );
+    assert.equal(summaries.length, 3);
+    assert.ok(summaries
+      .filter((item) => item.statistic === "minimum" || item.statistic === "maximum")
+      .every((item) => item.quality === "suspect"));
+    assert.equal(summaries.find((item) => item.statistic === "mean")?.quality, "valid");
+    assert.ok(summaries.every((item) => item.coverage?.availableRecords === 23));
+  }
+});
 
 test("não usa observações suspeitas para derivar ponto de orvalho", () => {
   const input = hourlyPair(0, 20, 60).map((item) =>
