@@ -419,6 +419,8 @@ if (input.qualities?.length) {
 
 values.push(limit);
 
+const limitParameter = `${values.length}`;
+
 const result = await pool.query(
   `SELECT id, station_id, source_id, variable, value, unit,
           observed_at, received_at, aggregation, statistic,
@@ -442,7 +444,7 @@ const result = await pool.query(
      )
      ${filters}
    ORDER BY observed_at ASC, variable ASC, statistic ASC
-   LIMIT ${values.length}`,
+   LIMIT ${limitParameter}`,
     values,
   );
 
