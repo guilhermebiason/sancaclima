@@ -59,6 +59,12 @@ test("consulta somente estatísticas diárias", async () => {
   assert.equal(calls.length, 1);
 
   assert.match(calls[0].text, /aggregation = ANY\(\$5::text\[\]\)/);
+  assert.match(calls[0].text, /aggregation = 'daily'/);
+  assert.match(calls[0].text, /period_start < \$3/);
+  assert.match(calls[0].text, /period_end > \$2/);
+  assert.match(calls[0].text, /aggregation <> 'daily'/);
+  assert.match(calls[0].text, /observed_at >= \$2/);
+  assert.match(calls[0].text, /observed_at < \$3/);
 
   assert.deepEqual(calls[0].values, [
     "INMET:A711",
