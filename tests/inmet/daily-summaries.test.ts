@@ -237,6 +237,66 @@ test("atribui a precipitação encerrada à meia-noite ao dia local anterior", (
   assert.equal(precipitation.coverage?.availableRecords, 1);
 });
 
+test("exige cobertura completa para validar a precipitação diária", () => {
+  const input: MeteorologicalObservation[] = Array.from({ length: 23 }, (_, index) => ({
+    id: `precipitation-${index}`,
+    stationId: "INMET:A711",
+    sourceId: "inmet-bdmep",
+    variable: "precipitation" as const,
+    value: 0.5,
+    unit: "mm",
+    observedAt: new Date(Date.parse("2026-10-22T04:00:00.000Z") + index * 3_600_000).toISOString(),
+    receivedAt: RECEIVED_AT,
+    aggregation: "accumulated" as const,
+    method: "measured" as const,
+    quality: "valid" as const,
+    qualityFlags: [],
+  }));
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    timeZone: "America/Sao_Paulo",
+    receivedAt: RECEIVED_AT,
+  });
+  const precipitation = result.find((item) =>
+    item.variable === "precipitation"
+    && item.aggregation === "daily"
+    && item.statistic === "sum",
+  );
+
+  assert.ok(precipitation);
+  assert.equal(precipitation.value, 11.5);
+  assert.equal(precipitation.coverage?.expectedRecords, 24);
+  assert.equal(precipitation.coverage?.availableRecords, 23);
+  assert.equal(precipitation.quality, "suspect");
+  assert.ok(precipitation.qualityFlags.includes("insufficient_coverage"));
+});
+
+test("não conta observação duplicada na cobertura nem nos extremos", () => {
+  const input = Array.from({ length: 24 }, (_, index) =>
+    hourlyPair(index, 10 + index, 50),
+  ).flat();
+  input.push({
+    ...input[0],
+    id: "temperature-duplicate",
+    value: -50,
+    qualityFlags: ["duplicate"],
+  });
+
+  const result = calculateDailyMeteorologicalSummaries(input, {
+    receivedAt: RECEIVED_AT,
+  });
+  const minimum = result.find((item) =>
+    item.variable === "air_temperature"
+    && item.aggregation === "daily"
+    && item.statistic === "minimum",
+  );
+
+  assert.ok(minimum);
+  assert.equal(minimum.value, 10);
+  assert.equal(minimum.coverage?.availableRecords, 24);
+  assert.equal(minimum.quality, "valid");
+});
+
 test("exclui precipitação suspeita da soma e da cobertura diária", () => {
   const input: MeteorologicalObservation[] = [
     {
